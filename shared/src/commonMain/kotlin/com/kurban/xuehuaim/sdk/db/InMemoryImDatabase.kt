@@ -175,7 +175,6 @@ internal class InMemoryImDatabase : ImDatabase {
         mutex.withLock {
             versionSync["$tableName|$entityId"] =
                 VersionSyncInfo(versionID = versionID, version = version)
-            Unit
         }
     }
 
@@ -191,13 +190,13 @@ internal class InMemoryImDatabase : ImDatabase {
         withContext(ioDispatcher) {
             mutex.withLock {
                 grabbedRedPackets[packetId] = grabTime
-                Unit
             }
         }
 
-    override suspend fun selectGrabbedRedPacket(packetId: String): Long? = withContext(ioDispatcher) {
-        mutex.withLock { grabbedRedPackets[packetId] }
-    }
+    override suspend fun selectGrabbedRedPacket(packetId: String): Long? =
+        withContext(ioDispatcher) {
+            mutex.withLock { grabbedRedPackets[packetId] }
+        }
 
     override suspend fun selectGrabbedRedPacketIds(packetIds: List<String>): List<String> =
         withContext(ioDispatcher) {
@@ -208,7 +207,6 @@ internal class InMemoryImDatabase : ImDatabase {
         withContext(ioDispatcher) {
             mutex.withLock {
                 kvStore[key to isGlobal] = value
-                Unit
             }
         }
 
@@ -284,7 +282,6 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun deleteAllChatLogs() = withContext(ioDispatcher) {
         mutex.withLock {
             messages.clear()
-            Unit
         }
     }
 
@@ -293,7 +290,6 @@ internal class InMemoryImDatabase : ImDatabase {
             conversations.indices.forEach { index ->
                 conversations[index] = conversations[index].copy(latestMsgSendTime = 0)
             }
-            Unit
         }
     }
 
@@ -308,9 +304,10 @@ internal class InMemoryImDatabase : ImDatabase {
             }
         }
 
-    override suspend fun getFriendByUserId(userId: String): FriendInfo? = withContext(ioDispatcher) {
-        mutex.withLock { friends.find { it.userID == userId } }
-    }
+    override suspend fun getFriendByUserId(userId: String): FriendInfo? =
+        withContext(ioDispatcher) {
+            mutex.withLock { friends.find { it.userID == userId } }
+        }
 
     override suspend fun insertOrReplaceFriend(friend: FriendInfo) = withContext(ioDispatcher) {
         mutex.withLock {
@@ -320,14 +317,13 @@ internal class InMemoryImDatabase : ImDatabase {
         }
     }
 
-    override suspend fun batchUpsertFriends(friendsList: List<FriendInfo>) =
+    override suspend fun batchUpsertFriends(friends: List<FriendInfo>) =
         withContext(ioDispatcher) {
             mutex.withLock {
-                friendsList.forEach { friend ->
-                    friends.removeAll { it.userID == friend.userID }
-                    friends.add(friend)
+                friends.forEach { friend ->
+                    this@InMemoryImDatabase.friends.removeAll { it.userID == friend.userID }
+                    this@InMemoryImDatabase.friends.add(friend)
                 }
-                Unit
             }
         }
 
@@ -341,7 +337,6 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun deleteAllFriends() = withContext(ioDispatcher) {
         mutex.withLock {
             friends.clear()
-            Unit
         }
     }
 
@@ -371,7 +366,6 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun deleteAllBlacks() = withContext(ioDispatcher) {
         mutex.withLock {
             blacks.clear()
-            Unit
         }
     }
 
@@ -387,13 +381,12 @@ internal class InMemoryImDatabase : ImDatabase {
         }
     }
 
-    override suspend fun batchUpsertGroups(groupsList: List<GroupInfo>) = withContext(ioDispatcher) {
+    override suspend fun batchUpsertGroups(groups: List<GroupInfo>) = withContext(ioDispatcher) {
         mutex.withLock {
-            groupsList.forEach { group ->
-                groups.removeAll { it.groupID == group.groupID }
-                groups.add(group)
+            groups.forEach { group ->
+                this@InMemoryImDatabase.groups.removeAll { it.groupID == group.groupID }
+                this@InMemoryImDatabase.groups.add(group)
             }
-            Unit
         }
     }
 
@@ -433,7 +426,6 @@ internal class InMemoryImDatabase : ImDatabase {
                     groupMembers.removeAll { it.groupID == member.groupID && it.userID == member.userID }
                     groupMembers.add(member)
                 }
-                Unit
             }
         }
 
@@ -472,14 +464,13 @@ internal class InMemoryImDatabase : ImDatabase {
         }
     }
 
-    override suspend fun batchUpsertMoments(momentsList: List<MomentInfo>) =
+    override suspend fun batchUpsertMoments(moments: List<MomentInfo>) =
         withContext(ioDispatcher) {
             mutex.withLock {
-                momentsList.forEach { moment ->
-                    moments.removeAll { it.momentID == moment.momentID }
-                    moments.add(moment)
+                moments.forEach { moment ->
+                    this@InMemoryImDatabase.moments.removeAll { it.momentID == moment.momentID }
+                    this@InMemoryImDatabase.moments.add(moment)
                 }
-                Unit
             }
         }
 
@@ -493,7 +484,6 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun deleteAllMoments() = withContext(ioDispatcher) {
         mutex.withLock {
             moments.clear()
-            Unit
         }
     }
 
@@ -519,7 +509,6 @@ internal class InMemoryImDatabase : ImDatabase {
                     favorites.removeAll { it.favoriteID == item.favoriteID }
                     favorites.add(item)
                 }
-                Unit
             }
         }
 
@@ -557,7 +546,6 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun insertOrReplaceUpload(record: UploadRecord) = withContext(ioDispatcher) {
         mutex.withLock {
             uploads[record.uploadID] = record
-            Unit
         }
     }
 
@@ -586,7 +574,6 @@ internal class InMemoryImDatabase : ImDatabase {
         withContext(ioDispatcher) {
             mutex.withLock {
                 notificationSeqs[conversationId] = seq
-                Unit
             }
         }
 }

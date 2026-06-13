@@ -28,7 +28,6 @@ import com.kurban.xuehuaim.sdk.model.UploadFileResult
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.util.CacheKey
 import com.kurban.xuehuaim.sdk.util.OpenImUtils
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginReq
