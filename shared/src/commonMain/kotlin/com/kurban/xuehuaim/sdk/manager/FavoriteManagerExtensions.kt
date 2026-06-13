@@ -85,14 +85,14 @@ internal suspend fun FavoriteManager.addMessage(
     apiService: ImApiService,
     eventEmitter: SdkEventEmitter,
     message: Message,
-): FavoriteItem? = withContext(ioDispatcher) {
-    val clientMsgId = message.clientMsgID ?: return@withContext null
+): FavoriteItem = withContext(ioDispatcher) {
+    val clientMsgId = message.clientMsgID
     addFavoriteItem(
         apiService,
         eventEmitter,
         FavoriteType.MESSAGE.value,
         clientMsgId,
-        kotlinx.serialization.json.Json.encodeToString(message),
+        Json.encodeToString(message),
     )
 }
 
@@ -108,7 +108,7 @@ internal suspend fun FavoriteManager.addMoment(
     eventEmitter,
     FavoriteType.MOMENT_CONTENT.value,
     moment.momentID,
-    kotlinx.serialization.json.Json.encodeToString(moment),
+    Json.encodeToString(moment),
 )
 
 internal suspend fun FavoriteManager.removeMoment(apiService: ImApiService, eventEmitter: SdkEventEmitter, momentId: String) =
