@@ -1,7 +1,8 @@
 package com.kurban.xuehuaim.sdk.network.sync
 
-import protokt.v1.openim.sdkws.MsgData
-import protokt.v1.openim.sdkws.UserSendMsgResp
+import okio.ByteString.Companion.toByteString
+import openim.sdkws.MsgData
+import openim.sdkws.UserSendMsgResp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -26,7 +27,7 @@ class SendMessageCodecTest {
             atUserIDList = listOf("user-c"),
         )
 
-        val decoded = MsgData.Deserializer.deserialize(encodeSendMsgReq(req))
+        val decoded = MsgData.ADAPTER.decode(encodeSendMsgReq(req))
 
         assertEquals("user-a", decoded.sendID)
         assertEquals("user-b", decoded.recvID)
@@ -36,18 +37,20 @@ class SendMessageCodecTest {
         assertEquals(1, decoded.sessionType)
         assertEquals(100, decoded.msgFrom)
         assertEquals(101, decoded.contentType)
-        assertEquals(content, decoded.content.bytes.decodeToString())
+        assertEquals(content, decoded.content.utf8())
         assertEquals(1_700_000_000_000, decoded.createTime)
         assertEquals(listOf("user-c"), decoded.atUserIDList)
     }
 
     @Test
     fun decodeUserSendMsgRespRoundTrip() {
-        val serialized = UserSendMsgResp {
-            serverMsgID = "server-1"
-            clientMsgID = "client-1"
-            sendTime = 1_700_000_000_123
-        }.serialize()
+        val serialized = UserSendMsgResp.ADAPTER.encode(
+            UserSendMsgResp(
+                serverMsgID = "server-1",
+                clientMsgID = "client-1",
+                sendTime = 1_700_000_000_123,
+            ),
+        )
 
         val decoded = decodeUserSendMsgResp(serialized)
 

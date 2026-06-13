@@ -12,7 +12,7 @@ plugins {
 }
 
 val protoGeneratedDir =
-    project(":proto").layout.buildDirectory.dir("generated/sources/proto/main/protokt")
+    project(":proto").layout.buildDirectory.dir("generated/source/wire")
 
 kotlin {
     compilerOptions {
@@ -57,21 +57,14 @@ kotlin {
     sourceSets {
         val databaseMain by creating {
             dependsOn(commonMain.get())
-            kotlin.srcDir("src/commonMain/database/kotlin")
+            kotlin.srcDir("src/databaseMain/kotlin")
             dependencies {
                 implementation(libs.sqldelight.coroutines.extensions)
             }
         }
-        val protoMain by creating {
-            dependsOn(commonMain.get())
-            kotlin.srcDir(protoGeneratedDir)
-            kotlin.srcDir("src/commonMain/proto/kotlin")
-            dependencies {
-                implementation(libs.protokt.runtime)
-            }
-        }
 
         commonMain {
+            kotlin.srcDir(protoGeneratedDir)
             dependencies {
                 implementation(libs.kotlin.logging)
                 implementation(libs.koin.core)
@@ -83,6 +76,7 @@ kotlin {
                 implementation(libs.ktor.serialization.kotlinx.json)
                 implementation(libs.ktor.client.websockets)
                 implementation(libs.okio)
+                implementation(libs.wire.runtime)
             }
         }
         commonTest.dependencies {
@@ -93,7 +87,6 @@ kotlin {
         }
         androidMain {
             dependsOn(databaseMain)
-            dependsOn(protoMain)
             dependencies {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.sqldelight.android.driver)
@@ -108,7 +101,6 @@ kotlin {
         }
         jvmMain {
             dependsOn(databaseMain)
-            dependsOn(protoMain)
             dependencies {
                 implementation(libs.ktor.client.cio)
                 implementation(libs.sqldelight.sqlite.driver)
@@ -117,7 +109,6 @@ kotlin {
             }
         }
         jsMain {
-            dependsOn(protoMain)
             dependencies {
                 implementation(libs.ktor.client.js)
             }
@@ -129,11 +120,7 @@ kotlin {
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
-    dependsOn(":proto:generateProto")
-}
-
-tasks.configureEach {
-    dependsOn(":proto:generateProto")
+    dependsOn(":proto:generateProtos")
 }
 
 sqldelight {

@@ -1,23 +1,12 @@
 plugins {
     alias(libs.plugins.kotlinJvm)
-    alias(libs.plugins.protokt)
+    alias(libs.plugins.wire)
 }
 
-protokt {
-    codec {
-        minimal()
-    }
-    generate {
-        descriptors = false
-    }
-}
-
-sourceSets {
-    main {
-        proto {
-            srcDir("src/main/proto")
-        }
-    }
+wire {
+    kotlin {}
+    root("openim.sdkws.PushMessages")
+    root("openim.sdkws.UserSendMsgResp")
 }
 
 tasks.withType<JavaCompile>().configureEach {

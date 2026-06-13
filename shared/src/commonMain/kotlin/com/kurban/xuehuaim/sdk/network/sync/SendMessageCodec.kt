@@ -1,5 +1,9 @@
 package com.kurban.xuehuaim.sdk.network.sync
 
+import okio.ByteString.Companion.toByteString
+import openim.sdkws.MsgData
+import openim.sdkws.UserSendMsgResp
+
 internal data class SendMsgReqData(
     val sendID: String,
     val recvID: String,
@@ -71,6 +75,44 @@ internal data class UserSendMsgRespData(
     val sendTime: Long,
 )
 
-internal expect fun encodeSendMsgReq(data: SendMsgReqData): ByteArray
+internal fun encodeSendMsgReq(data: SendMsgReqData): ByteArray {
+    val msgOptions = buildMap {
+        putAll(data.options)
+        if (!data.offlinePush) put("offlinePush", false)
+        if (data.isOnlineOnly) {
+            put("history", false)
+            put("persistent", false)
+            put("offlinePush", false)
+            put("unreadCount", false)
+        }
+    }
+    return MsgData.ADAPTER.encode(
+        MsgData(
+            sendID = data.sendID,
+            recvID = data.recvID,
+            groupID = data.groupID,
+            clientMsgID = data.clientMsgID,
+            senderPlatformID = data.senderPlatformID,
+            senderNickname = data.senderNickname,
+            senderFaceURL = data.senderFaceURL,
+            sessionType = data.sessionType,
+            msgFrom = data.msgFrom,
+            contentType = data.contentType,
+            content = data.contentBytes.toByteString(),
+            createTime = data.createTime,
+            atUserIDList = data.atUserIDList,
+            options = msgOptions,
+        ),
+    )
+}
 
-internal expect fun decodeUserSendMsgResp(data: ByteArray): UserSendMsgRespData?
+internal fun decodeUserSendMsgResp(data: ByteArray): UserSendMsgRespData? = try {
+    val resp = UserSendMsgResp.ADAPTER.decode(data)
+    UserSendMsgRespData(
+        serverMsgID = resp.serverMsgID,
+        clientMsgID = resp.clientMsgID,
+        sendTime = resp.sendTime,
+    )
+} catch (_: Exception) {
+    null
+}

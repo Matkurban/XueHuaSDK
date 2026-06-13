@@ -10,7 +10,6 @@ import com.kurban.xuehuaim.sdk.model.TextElem
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 
 class MessageContentParserTest {
 
@@ -155,7 +154,7 @@ class MessageContentParserTest {
         val parsed = conversation.withParsedLatestMsg()
 
         val latestMsg = requireNotNull(parsed.latestMsg)
-        assertNotNull(latestMsg.textElem)
-        assertEquals("预览", latestMsg.textElem?.content)
+        val textElem = requireNotNull(latestMsg.textElem)
+        assertEquals("预览", textElem.content)
     }
 }

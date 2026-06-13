@@ -33,4 +33,4 @@ plugins {
 }
 
 include(":proto")
-include(":database")
+include(":shared")

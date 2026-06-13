@@ -1,8 +1,9 @@
 package com.kurban.xuehuaim.sdk.network.sync
 
-import protokt.v1.openim.sdkws.MsgData
-import protokt.v1.openim.sdkws.PullMsgs
-import protokt.v1.openim.sdkws.PushMessages
+import okio.ByteString
+import openim.sdkws.MsgData
+import openim.sdkws.PullMsgs
+import openim.sdkws.PushMessages
 
 internal fun PushMessages.toPullMsgResp(): PullMsgResp = PullMsgResp(
     msgs = msgs.mapValues { (_, pullMsgs) -> pullMsgs.toMsgList() },
@@ -10,7 +11,7 @@ internal fun PushMessages.toPullMsgResp(): PullMsgResp = PullMsgResp(
 )
 
 private fun PullMsgs.toMsgList(): MsgList = MsgList(
-    msgs = msgs.map { it.toWsMsgData() },
+    msgs = Msgs.map { it.toWsMsgData() },
 )
 
 internal fun MsgData.toWsMsgData(): WsMsgData = WsMsgData(
@@ -29,7 +30,7 @@ internal fun MsgData.toWsMsgData(): WsMsgData = WsMsgData(
     senderFaceURL = senderFaceURL.takeIf { it.isNotEmpty() },
 )
 
-private fun protokt.v1.Bytes.toContentString(): String? {
-    if (isEmpty()) return null
-    return bytes.decodeToString()
+private fun ByteString.toContentString(): String? {
+    if (size == 0) return null
+    return utf8()
 }

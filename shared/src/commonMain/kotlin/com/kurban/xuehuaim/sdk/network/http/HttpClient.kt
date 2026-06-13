@@ -2,6 +2,7 @@ package com.kurban.xuehuaim.sdk.network.http
 
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.model.ApiResponse
+import com.kurban.xuehuaim.sdk.network.createHttpEngine
 import com.kurban.xuehuaim.sdk.util.OperationIdGenerator
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -159,4 +160,4 @@ internal fun ApiResponse<*>.unwrapVoid() {
         message = errMsg.ifBlank { errDlt ?: "request failed" })
 }
 
-internal expect fun createHttpEngine(): HttpClient
+

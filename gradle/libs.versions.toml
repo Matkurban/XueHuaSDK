@@ -13,7 +13,7 @@ ktor = "3.5.0"
 okio = "3.17.0"
 sqldelight = "2.3.2"
 sqlite-jdbc = "3.53.2.0"
-protokt = "1.0.0-beta.12"
+wire = "6.4.0"
 mavenPublish = "0.36.0"
 
 [libraries]
@@ -38,7 +38,7 @@ sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", versi
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-coroutines-extensions = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
-protokt-runtime = { module = "com.toasttab.protokt.v1:protokt-runtime", version.ref = "protokt" }
+wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
 
 [plugins]
 androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
@@ -46,5 +46,5 @@ kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }
-protokt = { id = "com.toasttab.protokt.v1", version.ref = "protokt" }
+wire = { id = "com.squareup.wire", version.ref = "wire" }
 mavenPublish = { id = "com.vanniktech.maven.publish", version.ref = "mavenPublish" }
