@@ -166,6 +166,7 @@ internal class SqlDelightImDatabase(
                 VersionSyncInfo(
                     versionID = row.versionID.orEmpty(),
                     version = row.version?.toInt() ?: 0,
+                    uidList = VersionSyncUidListCodec.decode(row.uidList),
                 )
             }
         }
@@ -175,6 +176,7 @@ internal class SqlDelightImDatabase(
         entityId: String,
         versionID: String,
         version: Int,
+        uidList: List<String>,
     ) = withContext(ioDispatcher) {
         queries.insertOrReplaceVersionSync(
             Local_version_sync(
@@ -183,7 +185,7 @@ internal class SqlDelightImDatabase(
                 entityID = entityId,
                 versionID = versionID,
                 version = version.toLong(),
-                uidList = null,
+                uidList = VersionSyncUidListCodec.encode(uidList),
                 updateTime = com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
             ),
         )
@@ -368,6 +370,11 @@ internal class SqlDelightImDatabase(
 
     override suspend fun deleteGroup(groupId: String) = withContext(ioDispatcher) {
         queries.deleteGroup(groupId)
+        Unit
+    }
+
+    override suspend fun deleteAllGroups() = withContext(ioDispatcher) {
+        queries.deleteAllGroups()
         Unit
     }
 

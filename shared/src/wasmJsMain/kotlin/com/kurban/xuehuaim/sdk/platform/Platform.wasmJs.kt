@@ -2,7 +2,7 @@ package com.kurban.xuehuaim.sdk.platform
 
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.worker.createDefaultWebWorkerDriver
-import com.kurban.xuehuaim.sdk.db.OpenIMDatabase
+import com.kurban.xuehuaim.sdk.db.ensureOpenIMSchema
 import com.kurban.xuehuaim.sdk.enum.IMPlatform
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -50,7 +50,7 @@ actual class DatabaseDriverFactory {
     actual fun createDriver(dbPath: String): SqlDriver = createDefaultWebWorkerDriver()
 
     actual suspend fun initializeSchema(driver: SqlDriver) {
-        OpenIMDatabase.Schema.create(driver)
+        ensureOpenIMSchema(driver)
     }
 }
 

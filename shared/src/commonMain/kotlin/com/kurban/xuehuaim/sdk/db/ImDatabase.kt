@@ -29,7 +29,13 @@ internal interface ImDatabase {
     suspend fun getMessages(conversationId: String, count: Long): List<Message>
     suspend fun deleteMessage(clientMsgId: String)
     suspend fun getVersionSync(tableName: String, entityId: String): VersionSyncInfo?
-    suspend fun setVersionSync(tableName: String, entityId: String, versionID: String, version: Int)
+    suspend fun setVersionSync(
+        tableName: String,
+        entityId: String,
+        versionID: String,
+        version: Int,
+        uidList: List<String> = emptyList(),
+    )
     suspend fun deleteVersionSync(tableName: String, entityId: String)
     suspend fun insertOrReplaceGrabbedRedPacket(packetId: String, grabTime: Long)
     suspend fun selectGrabbedRedPacket(packetId: String): Long?
@@ -65,6 +71,7 @@ internal interface ImDatabase {
     suspend fun insertOrReplaceGroup(group: GroupInfo)
     suspend fun batchUpsertGroups(groups: List<GroupInfo>)
     suspend fun deleteGroup(groupId: String)
+    suspend fun deleteAllGroups()
 
     suspend fun getGroupMembersPage(groupId: String, offset: Int, count: Int): List<GroupMemberInfo>
     suspend fun insertOrReplaceGroupMember(member: GroupMemberInfo)

@@ -9,6 +9,7 @@ import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdProvider
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.GroupSync
+import com.kurban.xuehuaim.sdk.sync.VersionedListPager
 import kotlinx.coroutines.withContext
 
 
@@ -19,17 +20,7 @@ class GroupManager internal constructor(
     private val loginUserId: LoginUserIdProvider,
 ) {
     suspend fun getJoinedGroupList(): List<GroupInfo> = withContext(ioDispatcher) {
-        val userId = loginUserId.requireUserId()
-        var groups = databaseService.getAllGroups()
-        if (groups.isEmpty()) {
-            GroupSync.syncJoinedGroups(apiService, databaseService, eventEmitter, userId)
-            groups = databaseService.getAllGroups()
-        }
-        if (groups.isEmpty()) {
-            groups = apiService.getJoinedGroupList(userId)
-            databaseService.batchUpsertGroups(groups)
-        }
-        groups
+        databaseService.getAllGroups()
     }
 
     suspend fun createGroup(groupName: String, memberUserIds: List<String>): GroupInfo =
@@ -148,11 +139,22 @@ class GroupManager internal constructor(
             apiService.getGroupApplicationUnhandledCount(loginUserId.requireUserId(), time)
         }
 
-    suspend fun getJoinedGroupListPage(pageNumber: Int = 1, pageSize: Int = 40): List<GroupInfo> =
-        getJoinedGroupListPage(apiService, loginUserId, pageNumber, pageSize)
+    suspend fun getJoinedGroupListPage(
+        offset: Int = 0,
+        count: Int = 40,
+    ): List<GroupInfo> = withContext(ioDispatcher) {
+        VersionedListPager.fetchJoinedGroupsPage(
+            databaseService = databaseService,
+            apiService = apiService,
+            userId = loginUserId.requireUserId(),
+            offset = offset,
+            count = count,
+        )
+    }
 
-    suspend fun isJoinedGroup(groupId: String): Boolean =
-        isJoinedGroup(apiService, loginUserId, groupId)
+    suspend fun isJoinedGroup(groupId: String): Boolean = withContext(ioDispatcher) {
+        databaseService.getGroupsByGroupIds(listOf(groupId)).isNotEmpty()
+    }
 
     suspend fun searchGroups(keyword: String): List<GroupInfo> =
         searchGroups(apiService, keyword)

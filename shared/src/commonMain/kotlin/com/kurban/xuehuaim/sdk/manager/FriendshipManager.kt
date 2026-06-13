@@ -10,6 +10,7 @@ import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdProvider
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.FriendSync
+import com.kurban.xuehuaim.sdk.sync.VersionedListPager
 import kotlinx.coroutines.withContext
 
 
@@ -21,29 +22,28 @@ class FriendshipManager internal constructor(
 ) {
     suspend fun getFriendList(filterBlack: Boolean = false): List<FriendInfo> =
         withContext(ioDispatcher) {
-            val userId = loginUserId.requireUserId()
             var list = databaseService.getAllFriends()
-            if (list.isEmpty()) {
-                FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
-                list = databaseService.getAllFriends()
-            }
-            if (list.isEmpty()) {
-                list = apiService.getFriendList(userId)
-                databaseService.batchUpsertFriends(list)
-            }
             if (filterBlack) {
                 val blackIds = databaseService.getBlackUserIds()
-                list.filter { it.userID !in blackIds }
-            } else {
-                list
+                list = list.filter { it.userID !in blackIds }
             }
+            list
         }
 
     suspend fun getFriendListPage(
         filterBlack: Boolean = false,
         offset: Int = 0,
         count: Int = 40,
-    ): List<FriendInfo> = databaseService.getFriendsPage(offset, count, filterBlack)
+    ): List<FriendInfo> = withContext(ioDispatcher) {
+        VersionedListPager.fetchFriendsPage(
+            databaseService = databaseService,
+            apiService = apiService,
+            userId = loginUserId.requireUserId(),
+            offset = offset,
+            count = count,
+            filterBlack = filterBlack,
+        )
+    }
 
     suspend fun addFriend(userId: String, reqMsg: String = "") = withContext(ioDispatcher) {
         apiService.addFriendRequest(userId, reqMsg)
@@ -72,12 +72,14 @@ class FriendshipManager internal constructor(
         handleMsg: String,
     ) = withContext(ioDispatcher) {
         apiService.respondFriendApplication(toUserID, accept, handleMsg)
-        FriendSync.syncFriends(
-            apiService,
-            databaseService,
-            eventEmitter,
-            loginUserId.requireUserId()
-        )
+        if (accept) {
+            FriendSync.syncFriends(
+                apiService,
+                databaseService,
+                eventEmitter,
+                loginUserId.requireUserId(),
+            )
+        }
     }
 
     suspend fun getBlacklist(): List<BlacklistInfo> = withContext(ioDispatcher) {

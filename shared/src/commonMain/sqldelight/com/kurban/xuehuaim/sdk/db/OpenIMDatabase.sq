@@ -396,6 +396,9 @@ INSERT OR REPLACE INTO local_groups VALUES ?;
 deleteGroup:
 DELETE FROM local_groups WHERE groupID = ?;
 
+deleteAllGroups:
+DELETE FROM local_groups;
+
 -- Group members
 selectGroupMembersByGroupID:
 SELECT * FROM local_group_members WHERE groupID = ? ORDER BY joinTime ASC;

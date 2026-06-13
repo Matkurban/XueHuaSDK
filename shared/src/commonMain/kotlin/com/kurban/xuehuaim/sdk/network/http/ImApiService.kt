@@ -31,6 +31,9 @@ import com.kurban.xuehuaim.sdk.model.ReportInfo
 import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.sync.FriendSyncApi
+import com.kurban.xuehuaim.sdk.sync.GroupSyncApi
+import com.kurban.xuehuaim.sdk.sync.VersionedListGapFillApi
 import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgBySeqsReq
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgResp
@@ -58,6 +61,7 @@ internal object ImApiRoutes {
     const val SET_CONVERSATIONS = "/conversation/set_conversations"
     const val GET_FRIENDS = "/friend/get_friend_list"
     const val GET_INCREMENTAL_FRIENDS = "/friend/get_incremental_friends"
+    const val GET_FULL_FRIEND_USER_IDS = "/friend/get_full_friend_user_ids"
     const val ADD_FRIEND = "/friend/add_friend"
     const val DELETE_FRIEND = "/friend/delete_friend"
     const val GET_FRIEND_APPLICATIONS = "/friend/get_friend_apply_list"
@@ -73,6 +77,7 @@ internal object ImApiRoutes {
     const val CREATE_GROUP = "/group/create_group"
     const val GET_JOINED_GROUPS = "/group/get_joined_group_list"
     const val GET_INCREMENTAL_JOIN_GROUP = "/group/get_incremental_join_groups"
+    const val GET_FULL_JOIN_GROUP_IDS = "/group/get_full_join_group_ids"
     const val GET_GROUP_INFO = "/group/get_groups_info"
     const val SET_GROUP_INFO = "/group/set_group_info"
     const val SET_GROUP_INFO_EX = "/group/set_group_info_ex"
@@ -510,6 +515,7 @@ internal data class IncrementalFriendsResp(
     @SerialName("full") val full: Boolean = false,
     @SerialName("versionID") val versionID: String = "",
     @SerialName("version") val version: Int = 0,
+    @SerialName("sortVersion") val sortVersion: Int = 0,
     @SerialName("delete") val delete: List<String>? = null,
     @SerialName("insert") val insert: List<FriendInfoDto>? = null,
     @SerialName("update") val update: List<FriendInfoDto>? = null,
@@ -520,9 +526,30 @@ internal data class IncrementalJoinGroupResp(
     @SerialName("full") val full: Boolean = false,
     @SerialName("versionID") val versionID: String = "",
     @SerialName("version") val version: Int = 0,
+    @SerialName("sortVersion") val sortVersion: Int = 0,
     @SerialName("delete") val delete: List<String>? = null,
     @SerialName("insert") val insert: List<GroupInfo>? = null,
     @SerialName("update") val update: List<GroupInfo>? = null,
+)
+
+@Serializable
+internal data class GetFullFriendUserIDsReq(
+    @SerialName("userID") val userID: String,
+)
+
+@Serializable
+internal data class GetFullFriendUserIDsResp(
+    @SerialName("userIDs") val userIDs: List<String> = emptyList(),
+)
+
+@Serializable
+internal data class GetFullJoinGroupIDsReq(
+    @SerialName("userID") val userID: String,
+)
+
+@Serializable
+internal data class GetFullJoinGroupIDsResp(
+    @SerialName("groupIDs") val groupIDs: List<String> = emptyList(),
 )
 
 @Serializable
@@ -908,7 +935,7 @@ internal fun applicationPlatformName(): String = when (currentPlatform()) {
 
 internal class ImApiService(
     private val httpClient: SdkHttpClient,
-) {
+) : FriendSyncApi, GroupSyncApi, VersionedListGapFillApi {
     suspend fun login(req: LoginReq): LoginResp =
         httpClient.chatPostEnvelope(ChatApiRoutes.LOGIN, req)
 
@@ -947,7 +974,7 @@ internal class ImApiService(
         IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
     )
 
-    suspend fun getIncrementalFriends(
+    override suspend fun getIncrementalFriends(
         userID: String,
         version: Int,
         versionID: String,
@@ -956,7 +983,7 @@ internal class ImApiService(
         IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
     )
 
-    suspend fun getIncrementalJoinGroup(
+    override suspend fun getIncrementalJoinGroup(
         userID: String,
         version: Int,
         versionID: String,
@@ -964,6 +991,22 @@ internal class ImApiService(
         ImApiRoutes.GET_INCREMENTAL_JOIN_GROUP,
         IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
     )
+
+    override suspend fun getFullFriendUserIDs(userID: String): List<String> {
+        val resp: GetFullFriendUserIDsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_FULL_FRIEND_USER_IDS,
+            GetFullFriendUserIDsReq(userID),
+        )
+        return resp.userIDs
+    }
+
+    override suspend fun getFullJoinGroupIDs(userID: String): List<String> {
+        val resp: GetFullJoinGroupIDsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_FULL_JOIN_GROUP_IDS,
+            GetFullJoinGroupIDsReq(userID),
+        )
+        return resp.groupIDs
+    }
 
     suspend fun getConversationsHasReadAndMaxSeq(
         userID: String,
@@ -994,7 +1037,7 @@ internal class ImApiService(
         return resp.friendsInfo.map { it.toFriendInfo(userID) }
     }
 
-    suspend fun getFriendList(userID: String, pageSize: Int = 100): List<FriendInfo> {
+    override suspend fun getFriendList(userID: String, pageSize: Int): List<FriendInfo> {
         var pageNumber = 1
         val all = mutableListOf<FriendInfo>()
         while (true) {
@@ -1019,7 +1062,7 @@ internal class ImApiService(
         return resp.groups
     }
 
-    suspend fun getJoinedGroupList(fromUserID: String, pageSize: Int = 100): List<GroupInfo> {
+    override suspend fun getJoinedGroupList(fromUserID: String, pageSize: Int): List<GroupInfo> {
         var pageNumber = 1
         val all = mutableListOf<GroupInfo>()
         while (true) {
@@ -1032,7 +1075,7 @@ internal class ImApiService(
         return all
     }
 
-    suspend fun getGroupsInfo(groupIDs: List<String>): List<GroupInfo> {
+    override suspend fun getGroupsInfo(groupIDs: List<String>): List<GroupInfo> {
         if (groupIDs.isEmpty()) return emptyList()
         val resp: GetGroupsInfoResp = httpClient.imPostEnvelope(
             ImApiRoutes.GET_GROUP_INFO,
@@ -1575,7 +1618,7 @@ internal class ImApiService(
         )
     }
 
-    suspend fun getDesignatedFriends(
+    override suspend fun getDesignatedFriends(
         ownerUserID: String,
         friendUserIDs: List<String>
     ): List<FriendInfo> {

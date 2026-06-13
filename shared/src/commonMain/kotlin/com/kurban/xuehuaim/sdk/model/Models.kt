@@ -9,6 +9,7 @@ import com.kurban.xuehuaim.sdk.enum.GroupType
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.enum.ReceiveMessageOpt
+import com.kurban.xuehuaim.sdk.util.FlexibleNullableTimestampSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -446,6 +447,7 @@ data class FavoriteItem(
     val targetType: String,
     val targetID: String,
     val data: String? = null,
+    @Serializable(with = FlexibleNullableTimestampSerializer::class)
     val createTime: Long? = null,
 )
 

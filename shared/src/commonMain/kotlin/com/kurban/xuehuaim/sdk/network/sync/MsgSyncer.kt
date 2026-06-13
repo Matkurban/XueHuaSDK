@@ -56,23 +56,36 @@ internal class MsgSyncer(
     suspend fun doConnectedSync() = withContext(ioDispatcher) {
         if (userId.isEmpty()) return@withContext
         eventEmitter.emitConversation(ConversationEvent.SyncStarted)
-        try {
-            eventEmitter.emitConversation(ConversationEvent.SyncProgress(10))
+        var syncFailed = false
+        eventEmitter.emitConversation(ConversationEvent.SyncProgress(10))
+        runCatching {
             ConversationSync.syncFromServer(
                 apiService = apiService,
                 databaseService = databaseService,
                 eventEmitter = eventEmitter,
                 userId = userId,
             )
-            eventEmitter.emitConversation(ConversationEvent.SyncProgress(60))
+        }.onFailure { e ->
+            syncFailed = true
+            log.error(e) { "conversation sync failed" }
+        }
+        eventEmitter.emitConversation(ConversationEvent.SyncProgress(60))
+        runCatching {
             FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
             FriendSync.syncBlackList(apiService, databaseService, userId)
+        }.onFailure { e ->
+            syncFailed = true
+            log.error(e) { "friend sync failed" }
+        }
+        runCatching {
             GroupSync.syncJoinedGroups(apiService, databaseService, eventEmitter, userId)
-            eventEmitter.emitConversation(ConversationEvent.SyncProgress(80))
-        } catch (e: Exception) {
-            log.error(e) { "connected sync failed" }
-            eventEmitter.emitConversation(ConversationEvent.SyncFailed(e.message ?: "sync failed"))
-            return@withContext
+        }.onFailure { e ->
+            syncFailed = true
+            log.error(e) { "group sync failed" }
+        }
+        eventEmitter.emitConversation(ConversationEvent.SyncProgress(80))
+        if (syncFailed) {
+            eventEmitter.emitConversation(ConversationEvent.SyncFailed("partial sync failed"))
         }
         runCatching { syncLatestMessagesForHiddenConversations() }
             .onFailure { e -> log.warn(e) { "latest message pull failed" } }

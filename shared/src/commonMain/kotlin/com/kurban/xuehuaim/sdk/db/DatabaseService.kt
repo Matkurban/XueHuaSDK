@@ -92,7 +92,8 @@ class DatabaseService(
         entityId: String,
         versionID: String,
         version: Int,
-    ) = db().setVersionSync(tableName, entityId, versionID, version)
+        uidList: List<String> = emptyList(),
+    ) = db().setVersionSync(tableName, entityId, versionID, version, uidList)
 
     suspend fun deleteVersionSync(tableName: String, entityId: String) =
         db().deleteVersionSync(tableName, entityId)
@@ -252,11 +253,24 @@ class DatabaseService(
 
     suspend fun getFriendByUserId(userId: String): FriendInfo? = db().getFriendByUserId(userId)
 
+    suspend fun getFriendsByUserIds(userIds: List<String>): List<FriendInfo> {
+        if (userIds.isEmpty()) return emptyList()
+        val byId = userIds.mapNotNull { id -> db().getFriendByUserId(id)?.let { id to it } }.toMap()
+        return userIds.mapNotNull { byId[it] }
+    }
+
     suspend fun insertOrReplaceFriend(friend: FriendInfo) = db().insertOrReplaceFriend(friend)
 
     suspend fun batchUpsertFriends(friends: List<FriendInfo>) = db().batchUpsertFriends(friends)
 
     suspend fun deleteFriend(userId: String) = db().deleteFriend(userId)
+
+    suspend fun deleteAllFriends() = db().deleteAllFriends()
+
+    internal suspend fun bindTestDatabase(imDatabase: ImDatabase) = dbMutex.withLock {
+        database?.close()
+        database = imDatabase
+    }
 
     suspend fun getBlackList(): List<BlacklistInfo> = db().getBlackList()
 
@@ -268,11 +282,19 @@ class DatabaseService(
 
     suspend fun getAllGroups(): List<GroupInfo> = db().getAllGroups()
 
+    suspend fun getGroupsByGroupIds(groupIds: List<String>): List<GroupInfo> {
+        if (groupIds.isEmpty()) return emptyList()
+        val byId = db().getAllGroups().associateBy { it.groupID }
+        return groupIds.mapNotNull { byId[it] }
+    }
+
     suspend fun insertOrReplaceGroup(group: GroupInfo) = db().insertOrReplaceGroup(group)
 
     suspend fun batchUpsertGroups(groups: List<GroupInfo>) = db().batchUpsertGroups(groups)
 
     suspend fun deleteGroup(groupId: String) = db().deleteGroup(groupId)
+
+    suspend fun deleteAllGroups() = db().deleteAllGroups()
 
     suspend fun getGroupMembersPage(
         groupId: String,

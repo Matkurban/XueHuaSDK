@@ -171,10 +171,11 @@ internal class InMemoryImDatabase : ImDatabase {
         entityId: String,
         versionID: String,
         version: Int,
+        uidList: List<String>,
     ) = withContext(ioDispatcher) {
         mutex.withLock {
             versionSync["$tableName|$entityId"] =
-                VersionSyncInfo(versionID = versionID, version = version)
+                VersionSyncInfo(versionID = versionID, version = version, uidList = uidList)
         }
     }
 
@@ -395,6 +396,10 @@ internal class InMemoryImDatabase : ImDatabase {
             groups.removeAll { it.groupID == groupId }
             Unit
         }
+    }
+
+    override suspend fun deleteAllGroups() = withContext(ioDispatcher) {
+        mutex.withLock { groups.clear() }
     }
 
     override suspend fun getGroupMembersPage(

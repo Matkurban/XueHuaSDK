@@ -4,27 +4,8 @@ import com.kurban.xuehuaim.sdk.enum.GroupRoleLevel
 import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
-import com.kurban.xuehuaim.sdk.network.http.LoginUserIdProvider
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import kotlinx.coroutines.withContext
-
-internal suspend fun GroupManager.getJoinedGroupListPage(
-    apiService: ImApiService,
-    loginUserId: LoginUserIdProvider,
-    pageNumber: Int,
-    pageSize: Int,
-) = withContext(ioDispatcher) {
-    apiService.getJoinedGroupListPage(loginUserId.requireUserId(), pageNumber, pageSize)
-}
-
-internal suspend fun GroupManager.isJoinedGroup(
-    apiService: ImApiService,
-    loginUserId: LoginUserIdProvider,
-    groupId: String,
-): Boolean = withContext(ioDispatcher) {
-    apiService.getJoinedGroupList(loginUserId.requireUserId())
-        .any { it.groupID == groupId }
-}
 
 internal suspend fun GroupManager.searchGroups(
     apiService: ImApiService,
