@@ -5,6 +5,7 @@ import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
+import com.kurban.xuehuaim.sdk.model.AdvancedMessage
 import com.kurban.xuehuaim.sdk.model.AdvancedTextElem
 import com.kurban.xuehuaim.sdk.model.CallSignalElem
 import com.kurban.xuehuaim.sdk.model.FileElem
@@ -489,8 +490,8 @@ suspend fun MessageManager.getAdvancedHistoryMessageListReverse(
     conversationId: String,
     count: Int = 20,
     startClientMsgId: String? = null,
-): List<Message> =
-    getAdvancedHistoryMessageList(conversationId, count, startClientMsgId).reversed()
+): AdvancedMessage =
+    getAdvancedHistoryMessageListInternal(conversationId, count, startClientMsgId, isReverse = true)
 
 internal suspend fun MessageManager.insertSingleMessageToLocalStorage(
     databaseService: DatabaseService,

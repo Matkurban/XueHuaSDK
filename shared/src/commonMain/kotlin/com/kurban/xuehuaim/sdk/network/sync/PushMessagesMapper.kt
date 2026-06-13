@@ -12,6 +12,8 @@ internal fun PushMessages.toPullMsgResp(): PullMsgResp = PullMsgResp(
 
 private fun PullMsgs.toMsgList(): MsgList = MsgList(
     msgs = Msgs.map { it.toWsMsgData() },
+    isEnd = isEnd,
+    endSeq = endSeq,
 )
 
 internal fun MsgData.toWsMsgData(): WsMsgData = WsMsgData(

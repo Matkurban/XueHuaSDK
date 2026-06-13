@@ -31,6 +31,7 @@ import com.kurban.xuehuaim.sdk.model.ReportInfo
 import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.sync.ConversationSyncApi
 import com.kurban.xuehuaim.sdk.sync.FriendSyncApi
 import com.kurban.xuehuaim.sdk.sync.GroupSyncApi
 import com.kurban.xuehuaim.sdk.sync.VersionedListGapFillApi
@@ -57,6 +58,7 @@ internal object ImApiRoutes {
     const val UPDATE_USER_INFO = "/user/update_user_info"
     const val GET_ALL_CONVERSATIONS = "/conversation/get_all_conversations"
     const val GET_INCREMENTAL_CONVERSATIONS = "/conversation/get_incremental_conversations"
+    const val GET_FULL_CONVERSATION_IDS = "/conversation/get_full_conversation_ids"
     const val GET_CONVERSATIONS = "/conversation/get_conversations"
     const val SET_CONVERSATIONS = "/conversation/set_conversations"
     const val GET_FRIENDS = "/friend/get_friend_list"
@@ -553,6 +555,16 @@ internal data class GetFullJoinGroupIDsResp(
 )
 
 @Serializable
+internal data class GetFullConversationIDsReq(
+    @SerialName("userID") val userID: String,
+)
+
+@Serializable
+internal data class GetFullConversationIDsResp(
+    @SerialName("conversationIDs") val conversationIDs: List<String> = emptyList(),
+)
+
+@Serializable
 internal data class IncrementalConversationResp(
     @SerialName("full") val full: Boolean = false,
     @SerialName("versionID") val versionID: String = "",
@@ -560,6 +572,17 @@ internal data class IncrementalConversationResp(
     @SerialName("delete") val delete: List<String>? = null,
     @SerialName("insert") val insert: List<ConversationInfo>? = null,
     @SerialName("update") val update: List<ConversationInfo>? = null,
+)
+
+@Serializable
+internal data class GetConversationsReq(
+    @SerialName("ownerUserID") val ownerUserID: String,
+    @SerialName("conversationIDs") val conversationIDs: List<String>,
+)
+
+@Serializable
+internal data class GetConversationsResp(
+    @SerialName("conversations") val conversations: List<ConversationInfo> = emptyList(),
 )
 
 @Serializable
@@ -572,6 +595,7 @@ internal data class ConversationsHasReadAndMaxSeqReq(
 internal data class ConversationSeqInfo(
     @SerialName("maxSeq") val maxSeq: Long = 0,
     @SerialName("hasReadSeq") val hasReadSeq: Long = 0,
+    @SerialName("minSeq") val minSeq: Long = 0,
 )
 
 @Serializable
@@ -935,7 +959,7 @@ internal fun applicationPlatformName(): String = when (currentPlatform()) {
 
 internal class ImApiService(
     private val httpClient: SdkHttpClient,
-) : FriendSyncApi, GroupSyncApi, VersionedListGapFillApi {
+) : ConversationSyncApi, FriendSyncApi, GroupSyncApi, VersionedListGapFillApi {
     suspend fun login(req: LoginReq): LoginResp =
         httpClient.chatPostEnvelope(ChatApiRoutes.LOGIN, req)
 
@@ -957,7 +981,7 @@ internal class ImApiService(
     suspend fun sendMessage(req: SendMsgReq): Message =
         httpClient.imPostEnvelope(ImApiRoutes.SEND_MSG, req)
 
-    suspend fun getAllConversations(ownerUserID: String): List<ConversationInfo> {
+    override suspend fun getAllConversations(ownerUserID: String): List<ConversationInfo> {
         val resp: GetAllConversationsResp = httpClient.imPostEnvelope(
             ImApiRoutes.GET_ALL_CONVERSATIONS,
             OwnerUserIDReq(ownerUserID),
@@ -965,7 +989,19 @@ internal class ImApiService(
         return resp.conversations
     }
 
-    suspend fun getIncrementalConversations(
+    override suspend fun getConversations(
+        ownerUserID: String,
+        conversationIDs: List<String>,
+    ): List<ConversationInfo> {
+        if (conversationIDs.isEmpty()) return emptyList()
+        val resp: GetConversationsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_CONVERSATIONS,
+            GetConversationsReq(ownerUserID, conversationIDs),
+        )
+        return resp.conversations
+    }
+
+    override suspend fun getIncrementalConversations(
         userID: String,
         version: Int,
         versionID: String,
@@ -973,6 +1009,14 @@ internal class ImApiService(
         ImApiRoutes.GET_INCREMENTAL_CONVERSATIONS,
         IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
     )
+
+    override suspend fun getFullConversationIDs(userID: String): List<String> {
+        val resp: GetFullConversationIDsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_FULL_CONVERSATION_IDS,
+            GetFullConversationIDsReq(userID = userID),
+        )
+        return resp.conversationIDs
+    }
 
     override suspend fun getIncrementalFriends(
         userID: String,
@@ -1008,7 +1052,7 @@ internal class ImApiService(
         return resp.groupIDs
     }
 
-    suspend fun getConversationsHasReadAndMaxSeq(
+    override suspend fun getConversationsHasReadAndMaxSeq(
         userID: String,
         conversationIDs: List<String>,
     ): ConversationsHasReadAndMaxSeqResp = httpClient.imPostEnvelope(

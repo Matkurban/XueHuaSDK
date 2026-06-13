@@ -1,0 +1,22 @@
+syntax = "proto3";
+package openim.msg;
+
+import "sdkws/sdkws.proto";
+
+option java_package = "openim.msg";
+
+message ConversationSeqs {
+  string conversationID = 2;
+  repeated int64 seqs = 3;
+}
+
+message GetSeqMessageReq {
+  string userID = 1;
+  repeated ConversationSeqs conversations = 2;
+  sdkws.PullOrder order = 3;
+}
+
+message GetSeqMessageResp {
+  map<string, sdkws.PullMsgs> msgs = 1;
+  map<string, sdkws.PullMsgs> notificationMsgs = 2;
+}

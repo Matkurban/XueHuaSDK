@@ -83,7 +83,11 @@ class ConversationManager internal constructor(
         count: Int = 100
     ): List<ConversationInfo> =
         withContext(ioDispatcher) {
-            databaseService.getConversationsPage(offset, count)
+            com.kurban.xuehuaim.sdk.sync.VersionedListPager.fetchConversationsPage(
+                databaseService = databaseService,
+                offset = offset,
+                count = count,
+            )
         }
 
     suspend fun getConversation(conversationId: String): ConversationInfo? =

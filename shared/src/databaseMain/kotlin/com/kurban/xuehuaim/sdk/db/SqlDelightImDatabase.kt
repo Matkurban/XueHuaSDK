@@ -155,6 +155,32 @@ internal class SqlDelightImDatabase(
                 .map(MessageDbMapper::fromRow)
         }
 
+    override suspend fun getConversationMaxNormalMsgSeq(conversationId: String): Long =
+        withContext(ioDispatcher) {
+            queries.selectMaxNormalMsgSeq(conversationId).executeAsOne()
+        }
+
+    override suspend fun getAllConversationMaxNormalMsgSeqs(): Map<String, Long> =
+        withContext(ioDispatcher) {
+            queries.selectMaxNormalMsgSeqByConversation().executeAsList()
+                .mapNotNull { row ->
+                    row.conversationID?.let { id -> id to row.maxSeq }
+                }.toMap()
+        }
+
+    override suspend fun getMessagesBySeqDesc(
+        conversationId: String,
+        count: Int,
+        beforeSeq: Long?,
+    ): List<Message> = withContext(ioDispatcher) {
+        val rows = if (beforeSeq != null && beforeSeq > 0) {
+            queries.selectMessagesBySeqDescBefore(conversationId, beforeSeq, count.toLong())
+        } else {
+            queries.selectMessagesBySeqDesc(conversationId, count.toLong())
+        }
+        rows.executeAsList().map(MessageDbMapper::fromRow)
+    }
+
     override suspend fun deleteMessage(clientMsgId: String) = withContext(ioDispatcher) {
         queries.deleteChatLog(clientMsgId)
         Unit
@@ -534,6 +560,11 @@ internal class SqlDelightImDatabase(
             )
             Unit
         }
+
+    override suspend fun getAllNotificationSeqs(): Map<String, Long> = withContext(ioDispatcher) {
+        queries.selectAllNotificationSeqs().executeAsList()
+            .associate { row -> row.conversationID to row.seq }
+    }
 
     private fun Message.toChatLogRow(): Local_chat_logs = Local_chat_logs(
         clientMsgID = clientMsgID,

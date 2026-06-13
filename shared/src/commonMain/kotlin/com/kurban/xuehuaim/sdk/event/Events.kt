@@ -42,9 +42,9 @@ sealed interface MessageEvent {
 sealed interface ConversationEvent {
     data class Changed(val conversation: ConversationInfo) : ConversationEvent
     data class TotalUnreadChanged(val count: Int) : ConversationEvent
-    data object SyncStarted : ConversationEvent
+    data class SyncStarted(val reinstalled: Boolean = false) : ConversationEvent
     data class SyncProgress(val progress: Int) : ConversationEvent
-    data class SyncFinished(val count: Int) : ConversationEvent
+    data class SyncFinished(val count: Int, val reinstalled: Boolean = false) : ConversationEvent
     data class SyncFailed(val error: String) : ConversationEvent
 }
 

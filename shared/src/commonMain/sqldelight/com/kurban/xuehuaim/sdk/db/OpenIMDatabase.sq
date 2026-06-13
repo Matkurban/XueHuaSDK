@@ -264,10 +264,15 @@ deleteConversation:
 DELETE FROM local_conversations WHERE conversationID = ?;
 
 selectVisibleConversations:
-SELECT * FROM local_conversations WHERE latestMsgSendTime > 0 ORDER BY isPinned DESC, latestMsgSendTime DESC;
+SELECT * FROM local_conversations
+WHERE latestMsgSendTime > 0
+ORDER BY CASE WHEN isPinned = 1 THEN 0 ELSE 1 END, MAX(latestMsgSendTime, draftTextTime) DESC;
 
 selectVisibleConversationsPage:
-SELECT * FROM local_conversations WHERE latestMsgSendTime > 0 ORDER BY isPinned DESC, latestMsgSendTime DESC LIMIT ? OFFSET ?;
+SELECT * FROM local_conversations
+WHERE latestMsgSendTime > 0
+ORDER BY CASE WHEN isPinned = 1 THEN 0 ELSE 1 END, MAX(latestMsgSendTime, draftTextTime) DESC
+LIMIT ? OFFSET ?;
 
 selectConversationById:
 SELECT * FROM local_conversations WHERE conversationID = ? LIMIT 1;
@@ -289,6 +294,25 @@ DELETE FROM local_chat_logs WHERE conversationID = ?;
 -- Chat logs
 selectMessagesByConversation:
 SELECT * FROM local_chat_logs WHERE conversationID = ? ORDER BY sendTime DESC LIMIT ?;
+
+selectMaxNormalMsgSeq:
+SELECT COALESCE(MAX(seq), 0) FROM local_chat_logs
+WHERE conversationID = ? AND contentType < 1000 AND seq > 0;
+
+selectMaxNormalMsgSeqByConversation:
+SELECT conversationID, COALESCE(MAX(seq), 0) AS maxSeq FROM local_chat_logs
+WHERE contentType < 1000 AND seq > 0
+GROUP BY conversationID;
+
+selectMessagesBySeqDesc:
+SELECT * FROM local_chat_logs
+WHERE conversationID = ? AND seq > 0
+ORDER BY seq DESC LIMIT ?;
+
+selectMessagesBySeqDescBefore:
+SELECT * FROM local_chat_logs
+WHERE conversationID = ? AND seq > 0 AND seq < ?
+ORDER BY seq DESC LIMIT ?;
 
 insertOrReplaceChatLog:
 INSERT OR REPLACE INTO local_chat_logs VALUES ?;
@@ -464,6 +488,9 @@ DELETE FROM local_uploads WHERE uploadID = ?;
 -- Notification seqs
 selectNotificationSeq:
 SELECT seq FROM local_notification_seqs WHERE conversationID = ? LIMIT 1;
+
+selectAllNotificationSeqs:
+SELECT * FROM local_notification_seqs;
 
 insertOrReplaceNotificationSeq:
 INSERT OR REPLACE INTO local_notification_seqs VALUES ?;

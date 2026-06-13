@@ -171,6 +171,7 @@ class IMManager internal constructor(
         loginUserIdHolder.userId = userId
         callManager.setCurrentUserId(userId)
         databaseService.switchSpace(userId)
+        msgSyncer.loadSeq()
         persistAuthCache(authData!!)
         msgSyncer.bindUser(userId)
         msgSyncer.bindCallManager(callManager)

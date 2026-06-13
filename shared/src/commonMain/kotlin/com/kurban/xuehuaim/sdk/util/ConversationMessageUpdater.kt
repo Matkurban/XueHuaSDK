@@ -6,6 +6,7 @@ import com.kurban.xuehuaim.sdk.event.ConversationEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.sync.MessageSeqSync
 
 internal object ConversationMessageUpdater {
     suspend fun updateFromMessage(
@@ -26,12 +27,12 @@ internal object ConversationMessageUpdater {
 
         val isBootstrap = existingSendTime == 0L
         val isIncoming = !isOutgoingSend && message.sendID != null && message.sendID != selfUserId
+        val updatedMaxSeq = maxOf(existing?.maxSeq ?: 0L, message.seq)
         val unreadCount = when {
             isOutgoingSend -> existing?.unreadCount ?: 0
             isBootstrap -> existing?.unreadCount ?: 0
-            !isIncoming -> existing?.unreadCount ?: 0
-            existing == null -> 1
-            else -> existing.unreadCount + 1
+            existing == null -> MessageSeqSync.unreadCountFromSeq(updatedMaxSeq, existing?.hasReadSeq ?: 0L)
+            else -> MessageSeqSync.unreadCountFromSeq(updatedMaxSeq, existing.hasReadSeq)
         }
         val peerUserId = when {
             message.sessionType == ConversationType.SINGLE -> {
@@ -53,7 +54,7 @@ internal object ConversationMessageUpdater {
             latestMsg = message.withParsedContent(),
             latestMsgSendTime = sendTime,
             unreadCount = unreadCount,
-            maxSeq = maxOf(existing?.maxSeq ?: 0L, message.seq),
+            maxSeq = updatedMaxSeq,
         ).normalizedForStorage()
 
         databaseService.insertOrReplaceConversation(updated)

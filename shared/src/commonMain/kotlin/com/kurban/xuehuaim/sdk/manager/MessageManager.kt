@@ -2,13 +2,14 @@ package com.kurban.xuehuaim.sdk.manager
 
 import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.db.SendingMessage
-import com.kurban.xuehuaim.sdk.enum.ConnectionState
 import com.kurban.xuehuaim.sdk.enum.ConversationType
+import com.kurban.xuehuaim.sdk.enum.ConnectionState
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.enum.SdkErrorCode
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
+import com.kurban.xuehuaim.sdk.model.AdvancedMessage
 import com.kurban.xuehuaim.sdk.model.AtTextElem
 import com.kurban.xuehuaim.sdk.model.AtUserInfo
 import com.kurban.xuehuaim.sdk.model.CustomElem
@@ -37,6 +38,7 @@ import com.kurban.xuehuaim.sdk.platform.FileSystem
 import com.kurban.xuehuaim.sdk.platform.currentPlatform
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.MessageDisplayEnricher
+import com.kurban.xuehuaim.sdk.sync.MessageGapChecker
 import com.kurban.xuehuaim.sdk.util.ClientMsgIdGenerator
 import com.kurban.xuehuaim.sdk.util.ConversationMessageUpdater
 import com.kurban.xuehuaim.sdk.util.OpenImUtils
@@ -63,6 +65,11 @@ class MessageManager internal constructor(
     private val fileSystem: FileSystem,
 ) {
     private var conversationManager: ConversationManager? = null
+    private val messageGapChecker by lazy {
+        MessageGapChecker(databaseService) { conversationId, lostSeqs, isReverse ->
+            msgSyncer.pullMessagesByLostSeqs(conversationId, lostSeqs, isReverse = isReverse)
+        }
+    }
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
     internal val pendingUploadBytes = mutableMapOf<String, ByteArray>()
     internal val pendingSnapshotBytes = mutableMapOf<String, ByteArray>()
@@ -420,8 +427,8 @@ class MessageManager internal constructor(
     suspend fun getAdvancedHistoryMessageList(
         conversationId: String,
         count: Int = 20
-    ): List<Message> =
-        fetchHistoryMessages(conversationId, count, startClientMsgId = null)
+    ): AdvancedMessage =
+        fetchHistoryMessages(conversationId, count, startClientMsgId = null, isReverse = false)
 
     suspend fun syncConversationMessages(conversationId: String, count: Int = 20) {
         getAdvancedHistoryMessageList(conversationId, count)
@@ -431,99 +438,36 @@ class MessageManager internal constructor(
         conversationId: String,
         count: Int,
         startClientMsgId: String?,
-    ): List<Message> = fetchHistoryMessages(conversationId, count, startClientMsgId)
+    ): AdvancedMessage = fetchHistoryMessages(conversationId, count, startClientMsgId, isReverse = false)
+
+    internal suspend fun getAdvancedHistoryMessageListInternal(
+        conversationId: String,
+        count: Int,
+        startClientMsgId: String?,
+        isReverse: Boolean,
+    ): AdvancedMessage = fetchHistoryMessages(conversationId, count, startClientMsgId, isReverse)
 
     private suspend fun fetchHistoryMessages(
         conversationId: String,
         count: Int,
         startClientMsgId: String?,
-    ): List<Message> = withContext(ioDispatcher) {
-        val queryCount = count.coerceAtLeast(1)
-        val conv = databaseService.getConversation(conversationId) ?: return@withContext emptyList()
-        val convMaxSeq = conv.maxSeq
-
-        var localResult = loadLocalHistoryMessages(conversationId, queryCount, startClientMsgId)
-
-        if (localResult.messages.size <= queryCount && isWebSocketConnected()) {
-            val anchorSeq = resolveHistoryAnchorSeq(
-                startClientMsgId = startClientMsgId,
-                dataList = localResult.messages,
-                convMaxSeq = convMaxSeq,
-                startMsgSeq = localResult.startMsgSeq,
-            )
-            pullHistoryFromCloud(conversationId, queryCount, anchorSeq)
-            localResult = loadLocalHistoryMessages(conversationId, queryCount, startClientMsgId)
-        }
-
-        val dataList = localResult.messages
-        val result = if (dataList.size <= queryCount) dataList else dataList.take(queryCount)
-        MessageDisplayEnricher.enrichMessages(apiService, databaseService, result)
-    }
-
-    private data class LocalHistoryResult(
-        val messages: List<Message>,
-        val startMsgSeq: Long? = null,
-    )
-
-    private suspend fun loadLocalHistoryMessages(
-        conversationId: String,
-        count: Int,
-        startClientMsgId: String?,
-    ): LocalHistoryResult {
-        if (startClientMsgId.isNullOrBlank()) {
-            return LocalHistoryResult(
-                databaseService.getMessages(conversationId, (count + 1).toLong()),
-            )
-        }
-        val all = databaseService.getMessages(conversationId, (count * 3).toLong())
-        val index = all.indexOfFirst { it.clientMsgID == startClientMsgId }
-        if (index < 0) {
-            return LocalHistoryResult(emptyList())
-        }
-        val startMsgSeq = all[index].seq.takeIf { it > 0 }
-        if (index == 0) {
-            return LocalHistoryResult(emptyList(), startMsgSeq)
-        }
-        return LocalHistoryResult(
-            messages = all.subList(maxOf(0, index - count), index),
-            startMsgSeq = startMsgSeq,
-        )
-    }
-
-    private fun resolveHistoryAnchorSeq(
-        startClientMsgId: String?,
-        dataList: List<Message>,
-        convMaxSeq: Long,
-        startMsgSeq: Long?,
-    ): Long {
-        if (!startClientMsgId.isNullOrBlank()) {
-            val anchor = when {
-                dataList.isNotEmpty() -> dataList.last().seq
-                startMsgSeq != null && startMsgSeq > 0 -> startMsgSeq
-                else -> convMaxSeq.coerceAtLeast(1L)
-            }
-            return if (anchor > 1) anchor else 1L
-        }
-        return when {
-            dataList.isNotEmpty() -> dataList.last().seq.takeIf { it > 0 }
-                ?: convMaxSeq.coerceAtLeast(1L)
-
-            convMaxSeq > 0 -> convMaxSeq + 1
-            else -> 1L
-        }
-    }
-
-    private suspend fun pullHistoryFromCloud(conversationId: String, count: Int, currentSeq: Long) {
-        if (currentSeq < 1) return
-        val beginSeq = (currentSeq - count).coerceAtLeast(1L)
-        val endSeq = currentSeq - 1
-        if (endSeq < beginSeq) return
-        msgSyncer.pullMessagesBySeqList(
+        isReverse: Boolean,
+    ): AdvancedMessage = withContext(ioDispatcher) {
+        val gapResult = messageGapChecker.fetchMessagesWithGapCheck(
             conversationId = conversationId,
-            begin = beginSeq,
-            end = endSeq,
-            num = count.toLong(),
-            order = 1,
+            count = count,
+            startClientMsgId = startClientMsgId,
+            isReverse = isReverse,
+        )
+        val enriched = MessageDisplayEnricher.enrichMessages(
+            apiService,
+            databaseService,
+            gapResult.messages,
+        )
+        AdvancedMessage(
+            messageList = enriched,
+            isEnd = gapResult.isEnd,
+            lastMinSeq = gapResult.lastMinSeq,
         )
     }
 

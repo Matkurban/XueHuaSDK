@@ -3,6 +3,7 @@ package com.kurban.xuehuaim.sdk.sync
 import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.enum.SdkErrorCode
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
+import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.FriendInfo
 import com.kurban.xuehuaim.sdk.model.GroupInfo
 
@@ -34,6 +35,15 @@ internal object VersionedListPager {
 
         result = result.filter { it.userID !in blackIds }
         return result.take(count)
+    }
+
+    suspend fun fetchConversationsPage(
+        databaseService: DatabaseService,
+        offset: Int,
+        count: Int,
+    ): List<ConversationInfo> {
+        if (offset < 0 || count <= 0) return emptyList()
+        return databaseService.getConversationsPage(offset, count)
     }
 
     suspend fun fetchJoinedGroupsPage(

@@ -32,6 +32,8 @@ internal data class PullMsgResp(
 @Serializable
 internal data class MsgList(
     @JsonNames("msgs", "Msgs") val msgs: List<WsMsgData> = emptyList(),
+    @SerialName("isEnd") val isEnd: Boolean = false,
+    @SerialName("endSeq") val endSeq: Long = 0,
 )
 
 @Serializable

@@ -27,6 +27,13 @@ internal interface ImDatabase {
     suspend fun deleteChatLogsByConversation(conversationId: String)
     suspend fun insertOrReplaceMessage(message: Message)
     suspend fun getMessages(conversationId: String, count: Long): List<Message>
+    suspend fun getConversationMaxNormalMsgSeq(conversationId: String): Long
+    suspend fun getAllConversationMaxNormalMsgSeqs(): Map<String, Long>
+    suspend fun getMessagesBySeqDesc(
+        conversationId: String,
+        count: Int,
+        beforeSeq: Long? = null,
+    ): List<Message>
     suspend fun deleteMessage(clientMsgId: String)
     suspend fun getVersionSync(tableName: String, entityId: String): VersionSyncInfo?
     suspend fun setVersionSync(
@@ -101,6 +108,7 @@ internal interface ImDatabase {
 
     suspend fun getNotificationSeq(conversationId: String): Long
     suspend fun setNotificationSeq(conversationId: String, seq: Long)
+    suspend fun getAllNotificationSeqs(): Map<String, Long>
 }
 
 internal expect suspend fun createImDatabase(

@@ -1,5 +1,7 @@
 package com.kurban.xuehuaim.sdk.db
 
+import com.kurban.xuehuaim.sdk.enum.MessageType
+import com.kurban.xuehuaim.sdk.util.ConversationSort
 import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.FavoriteItem
@@ -62,17 +64,18 @@ internal class InMemoryImDatabase : ImDatabase {
     override suspend fun getVisibleConversations(): List<ConversationInfo> =
         withContext(ioDispatcher) {
             mutex.withLock {
-                conversations.filter { (it.latestMsgSendTime ?: 0) > 0 }
-                    .sortedByDescending { it.latestMsgSendTime ?: 0 }
-                    .toList()
+                ConversationSort.simpleSort(
+                    conversations.filter { (it.latestMsgSendTime ?: 0) > 0 },
+                )
             }
         }
 
     override suspend fun getConversationsPage(offset: Int, count: Int): List<ConversationInfo> =
         withContext(ioDispatcher) {
             mutex.withLock {
-                conversations.filter { (it.latestMsgSendTime ?: 0) > 0 }
-                    .sortedByDescending { it.latestMsgSendTime ?: 0 }
+                ConversationSort.simpleSort(
+                    conversations.filter { (it.latestMsgSendTime ?: 0) > 0 },
+                )
                     .drop(offset)
                     .take(count)
             }
@@ -153,6 +156,50 @@ internal class InMemoryImDatabase : ImDatabase {
                     .take(count.toInt())
             }
         }
+
+    override suspend fun getConversationMaxNormalMsgSeq(conversationId: String): Long =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                messages.asSequence()
+                    .filter {
+                        it.conversationID == conversationId &&
+                                it.seq > 0 &&
+                                (it.contentType?.value ?: 0) < MessageType.NOTIFICATION_BEGIN.value
+                    }
+                    .maxOfOrNull { it.seq } ?: 0L
+            }
+        }
+
+    override suspend fun getAllConversationMaxNormalMsgSeqs(): Map<String, Long> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                messages.asSequence()
+                    .filter {
+                        it.seq > 0 &&
+                                (it.contentType?.value ?: 0) < MessageType.NOTIFICATION_BEGIN.value
+                    }
+                    .groupBy { it.conversationID.orEmpty() }
+                    .mapValues { (_, msgs) -> msgs.maxOf { it.seq } }
+            }
+        }
+
+    override suspend fun getMessagesBySeqDesc(
+        conversationId: String,
+        count: Int,
+        beforeSeq: Long?,
+    ): List<Message> = withContext(ioDispatcher) {
+        mutex.withLock {
+            messages.asSequence()
+                .filter {
+                    it.conversationID == conversationId &&
+                            it.seq > 0 &&
+                            (beforeSeq == null || beforeSeq <= 0 || it.seq < beforeSeq)
+                }
+                .sortedByDescending { it.seq }
+                .take(count)
+                .toList()
+        }
+    }
 
     override suspend fun deleteMessage(clientMsgId: String) = withContext(ioDispatcher) {
         mutex.withLock {
@@ -581,4 +628,8 @@ internal class InMemoryImDatabase : ImDatabase {
                 notificationSeqs[conversationId] = seq
             }
         }
+
+    override suspend fun getAllNotificationSeqs(): Map<String, Long> = withContext(ioDispatcher) {
+        mutex.withLock { notificationSeqs.toMap() }
+    }
 }

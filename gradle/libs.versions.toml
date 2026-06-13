@@ -15,7 +15,7 @@ sqldelight = "2.3.2"
 sqlite-jdbc = "3.53.2.0"
 wire = "6.4.0"
 mavenPublish = "0.36.0"
-version = "1.0.1"
+version = "1.0.2"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

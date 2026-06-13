@@ -83,6 +83,19 @@ class DatabaseService(
     suspend fun getMessages(conversationId: String, count: Long): List<Message> =
         db().getMessages(conversationId, count).map { it.withParsedContent() }
 
+    suspend fun getConversationMaxNormalMsgSeq(conversationId: String): Long =
+        db().getConversationMaxNormalMsgSeq(conversationId)
+
+    suspend fun getAllConversationMaxNormalMsgSeqs(): Map<String, Long> =
+        db().getAllConversationMaxNormalMsgSeqs()
+
+    suspend fun getMessagesBySeqDesc(
+        conversationId: String,
+        count: Int,
+        beforeSeq: Long? = null,
+    ): List<Message> =
+        db().getMessagesBySeqDesc(conversationId, count, beforeSeq).map { it.withParsedContent() }
+
     suspend fun deleteMessage(clientMsgId: String) = db().deleteMessage(clientMsgId)
     suspend fun getVersionSync(tableName: String, entityId: String): VersionSyncInfo? =
         db().getVersionSync(tableName, entityId)
@@ -343,6 +356,14 @@ class DatabaseService(
         db().getUploadByHashAndName(hash, name)
 
     suspend fun deleteUpload(uploadId: String) = db().deleteUpload(uploadId)
+
+    suspend fun getNotificationSeq(conversationId: String): Long =
+        db().getNotificationSeq(conversationId)
+
+    suspend fun setNotificationSeq(conversationId: String, seq: Long) =
+        db().setNotificationSeq(conversationId, seq)
+
+    suspend fun getAllNotificationSeqs(): Map<String, Long> = db().getAllNotificationSeqs()
 
     suspend fun markConversationNotInGroup(groupId: String) {
         val conversationId = OpenImUtils.genGroupConversationID(groupId)
