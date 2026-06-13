@@ -212,6 +212,14 @@ OpenIM.initialize(
 
 val imManager = OpenIM.iMManager
 // imManager.login(...)
+
+// API 命名与 openim_sdk (Dart) 一致，例如：
+// imManager.messageManager.createVideoMessageFromBytes(...)
+// imManager.groupManager.getGroupMemberList(groupID, filter, offset, count)
+// imManager.friendshipManager.getFriendList(filterBlack = true)
+// imManager.momentsManager.getMomentList(ownerUserID = null, pageNumber = 1, showNumber = 20)
+// imManager.favoriteManager.addMessage(message)
+// imManager.userManager.deleteAccount(currentPassword)
 ```
 
 ## 主要技术栈

@@ -419,6 +419,27 @@ data class MomentComment(
 )
 
 @Serializable
+data class MomentCommentWithUser(
+    val commentID: String,
+    val momentID: String,
+    val userID: String,
+    val nickname: String? = null,
+    val faceURL: String? = null,
+    val content: String? = null,
+    val createTime: String? = null,
+)
+
+@Serializable
+data class MomentListResponse(
+    val total: Int = 0,
+    val moments: List<MomentInfo> = emptyList(),
+) {
+    companion object {
+        fun empty() = MomentListResponse()
+    }
+}
+
+@Serializable
 data class FavoriteItem(
     val favoriteID: String,
     val userID: String,

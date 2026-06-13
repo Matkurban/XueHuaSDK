@@ -1,8 +1,14 @@
 package com.kurban.xuehuaim.sdk.db
 
 import app.cash.sqldelight.db.SqlDriver
+import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
+import com.kurban.xuehuaim.sdk.model.FavoriteItem
+import com.kurban.xuehuaim.sdk.model.FriendInfo
+import com.kurban.xuehuaim.sdk.model.GroupInfo
+import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import kotlinx.coroutines.withContext
@@ -285,6 +291,246 @@ internal class SqlDelightImDatabase(
         queries.hideAllConversations()
         Unit
     }
+
+    override suspend fun getAllFriends(): List<FriendInfo> = withContext(ioDispatcher) {
+        queries.selectAllFriends().executeAsList().map(SocialDbMappers::friendFromRow)
+    }
+
+    override suspend fun getFriendsPage(offset: Int, count: Int): List<FriendInfo> =
+        withContext(ioDispatcher) {
+            queries.selectFriendsPage(count.toLong(), offset.toLong())
+                .executeAsList()
+                .map(SocialDbMappers::friendFromRow)
+        }
+
+    override suspend fun getFriendByUserId(userId: String): FriendInfo? = withContext(ioDispatcher) {
+        queries.selectFriendByUserID(userId).executeAsOneOrNull()?.let(SocialDbMappers::friendFromRow)
+    }
+
+    override suspend fun insertOrReplaceFriend(friend: FriendInfo) = withContext(ioDispatcher) {
+        queries.insertOrReplaceFriend(SocialDbMappers.friendToRow(friend))
+        Unit
+    }
+
+    override suspend fun batchUpsertFriends(friends: List<FriendInfo>) = withContext(ioDispatcher) {
+        friends.forEach { queries.insertOrReplaceFriend(SocialDbMappers.friendToRow(it)) }
+        Unit
+    }
+
+    override suspend fun deleteFriend(userId: String) = withContext(ioDispatcher) {
+        queries.deleteFriend(userId)
+        Unit
+    }
+
+    override suspend fun deleteAllFriends() = withContext(ioDispatcher) {
+        queries.deleteAllFriends()
+        Unit
+    }
+
+    override suspend fun getBlackList(): List<BlacklistInfo> = withContext(ioDispatcher) {
+        queries.selectAllBlacks().executeAsList().map(SocialDbMappers::blackFromRow)
+    }
+
+    override suspend fun getBlackUserIds(): Set<String> = withContext(ioDispatcher) {
+        queries.selectBlackUserIDs().executeAsList().toSet()
+    }
+
+    override suspend fun insertOrReplaceBlack(black: BlacklistInfo) = withContext(ioDispatcher) {
+        queries.insertOrReplaceBlack(SocialDbMappers.blackToRow(black))
+        Unit
+    }
+
+    override suspend fun deleteBlack(blockUserId: String) = withContext(ioDispatcher) {
+        queries.deleteBlack(blockUserId)
+        Unit
+    }
+
+    override suspend fun deleteAllBlacks() = withContext(ioDispatcher) {
+        queries.deleteAllBlacks()
+        Unit
+    }
+
+    override suspend fun getAllGroups(): List<GroupInfo> = withContext(ioDispatcher) {
+        queries.selectAllGroups().executeAsList().map(SocialDbMappers::groupFromRow)
+    }
+
+    override suspend fun insertOrReplaceGroup(group: GroupInfo) = withContext(ioDispatcher) {
+        queries.insertOrReplaceGroup(SocialDbMappers.groupToRow(group))
+        Unit
+    }
+
+    override suspend fun batchUpsertGroups(groups: List<GroupInfo>) = withContext(ioDispatcher) {
+        groups.forEach { queries.insertOrReplaceGroup(SocialDbMappers.groupToRow(it)) }
+        Unit
+    }
+
+    override suspend fun deleteGroup(groupId: String) = withContext(ioDispatcher) {
+        queries.deleteGroup(groupId)
+        Unit
+    }
+
+    override suspend fun getGroupMembersPage(
+        groupId: String,
+        offset: Int,
+        count: Int,
+    ): List<GroupMemberInfo> = withContext(ioDispatcher) {
+        queries.selectGroupMembersPage(groupId, count.toLong(), offset.toLong())
+            .executeAsList()
+            .map(SocialDbMappers::groupMemberFromRow)
+    }
+
+    override suspend fun insertOrReplaceGroupMember(member: GroupMemberInfo) =
+        withContext(ioDispatcher) {
+            queries.insertOrReplaceGroupMember(SocialDbMappers.groupMemberToRow(member))
+            Unit
+        }
+
+    override suspend fun batchUpsertGroupMembers(members: List<GroupMemberInfo>) =
+        withContext(ioDispatcher) {
+            members.forEach { queries.insertOrReplaceGroupMember(SocialDbMappers.groupMemberToRow(it)) }
+            Unit
+        }
+
+    override suspend fun deleteGroupMembers(groupId: String) = withContext(ioDispatcher) {
+        queries.deleteGroupMembersByGroupID(groupId)
+        Unit
+    }
+
+    override suspend fun getMomentsPage(offset: Int, count: Int): List<MomentInfo> =
+        withContext(ioDispatcher) {
+            queries.selectMomentsPage(count.toLong(), offset.toLong())
+                .executeAsList()
+                .map(SocialDbMappers::momentFromRow)
+        }
+
+    override suspend fun getMomentsByUserIdPage(
+        userId: String,
+        offset: Int,
+        count: Int,
+    ): List<MomentInfo> = withContext(ioDispatcher) {
+        queries.selectMomentsByUserIDPage(userId, count.toLong(), offset.toLong())
+            .executeAsList()
+            .map(SocialDbMappers::momentFromRow)
+    }
+
+    override suspend fun insertOrReplaceMoment(moment: MomentInfo) = withContext(ioDispatcher) {
+        queries.insertOrReplaceMoment(SocialDbMappers.momentToRow(moment))
+        Unit
+    }
+
+    override suspend fun batchUpsertMoments(moments: List<MomentInfo>) = withContext(ioDispatcher) {
+        moments.forEach { queries.insertOrReplaceMoment(SocialDbMappers.momentToRow(it)) }
+        Unit
+    }
+
+    override suspend fun deleteMoment(momentId: String) = withContext(ioDispatcher) {
+        queries.deleteMomentByID(momentId)
+        Unit
+    }
+
+    override suspend fun deleteAllMoments() = withContext(ioDispatcher) {
+        queries.deleteAllMoments()
+        Unit
+    }
+
+    override suspend fun getFavoritesPage(offset: Int, count: Int): List<FavoriteItem> =
+        withContext(ioDispatcher) {
+            queries.selectFavoritesPage(count.toLong(), offset.toLong())
+                .executeAsList()
+                .map(SocialDbMappers::favoriteFromRow)
+        }
+
+    override suspend fun insertOrReplaceFavorite(item: FavoriteItem) = withContext(ioDispatcher) {
+        queries.insertOrReplaceFavorite(SocialDbMappers.favoriteToRow(item))
+        Unit
+    }
+
+    override suspend fun batchUpsertFavorites(items: List<FavoriteItem>) =
+        withContext(ioDispatcher) {
+            items.forEach { queries.insertOrReplaceFavorite(SocialDbMappers.favoriteToRow(it)) }
+            Unit
+        }
+
+    override suspend fun deleteFavorite(favoriteId: String) = withContext(ioDispatcher) {
+        queries.deleteFavoriteByID(favoriteId)
+        Unit
+    }
+
+    override suspend fun deleteFavoriteByTarget(targetType: String, targetId: String) =
+        withContext(ioDispatcher) {
+            queries.deleteFavoriteByTarget(targetType, targetId)
+            Unit
+        }
+
+    override suspend fun insertOrReplaceSendingMessage(record: SendingMessage) =
+        withContext(ioDispatcher) {
+            queries.insertOrReplaceSendingMessage(
+                Local_sending_messages(
+                    clientMsgID = record.clientMsgID,
+                    conversationID = record.conversationID,
+                    ex = record.ex,
+                ),
+            )
+            Unit
+        }
+
+    override suspend fun deleteSendingMessage(clientMsgId: String) = withContext(ioDispatcher) {
+        queries.deleteSendingMessage(clientMsgId)
+        Unit
+    }
+
+    override suspend fun insertOrReplaceUpload(record: UploadRecord) = withContext(ioDispatcher) {
+        queries.insertOrReplaceUpload(
+            Local_uploads(
+                uploadID = record.uploadID,
+                hash = record.hash,
+                name = record.name,
+                fileSize = record.fileSize,
+                partSize = record.partSize,
+                partNum = record.partNum?.toLong(),
+                uploadedParts = record.uploadedParts,
+                updateTime = record.updateTime,
+            ),
+        )
+        Unit
+    }
+
+    override suspend fun getUpload(uploadId: String): UploadRecord? = withContext(ioDispatcher) {
+        queries.selectUploadByID(uploadId).executeAsOneOrNull()?.let { row ->
+            UploadRecord(
+                uploadID = row.uploadID,
+                hash = row.hash,
+                name = row.name,
+                fileSize = row.fileSize,
+                partSize = row.partSize,
+                partNum = row.partNum?.toInt(),
+                uploadedParts = row.uploadedParts,
+                updateTime = row.updateTime,
+            )
+        }
+    }
+
+    override suspend fun deleteUpload(uploadId: String) = withContext(ioDispatcher) {
+        queries.deleteUploadByID(uploadId)
+        Unit
+    }
+
+    override suspend fun getNotificationSeq(conversationId: String): Long =
+        withContext(ioDispatcher) {
+            queries.selectNotificationSeq(conversationId).executeAsOneOrNull() ?: 0L
+        }
+
+    override suspend fun setNotificationSeq(conversationId: String, seq: Long) =
+        withContext(ioDispatcher) {
+            queries.insertOrReplaceNotificationSeq(
+                Local_notification_seqs(
+                    conversationID = conversationId,
+                    seq = seq,
+                    updateTime = com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
+                ),
+            )
+            Unit
+        }
 
     private fun Message.toChatLogRow(): Local_chat_logs = Local_chat_logs(
         clientMsgID = clientMsgID,

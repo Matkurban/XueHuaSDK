@@ -101,11 +101,13 @@ internal class WebSocketService(
 
     private suspend fun doConnect() {
         eventEmitter.setConnectionState(ConnectionState.CONNECTING)
+        eventEmitter.emitConnection(ConnectionEvent.Connecting)
         try {
             httpClient.webSocket(urlString = buildWsUrl()) {
                 session = this
                 reconnectAttempts = 0
                 eventEmitter.setConnectionState(ConnectionState.CONNECTED)
+                eventEmitter.emitConnection(ConnectionEvent.ConnectSuccess)
                 startHeartbeat()
                 onConnected?.invoke()
                 listenIncoming(this@webSocket)
@@ -176,6 +178,7 @@ internal class WebSocketService(
     private suspend fun handleAuthHandshakeError(errCode: Int, errMsg: String) {
         when (errCode) {
             1501 -> eventEmitter.emitConnection(ConnectionEvent.TokenExpired)
+            1503 -> eventEmitter.emitConnection(ConnectionEvent.TokenInvalid)
             1506 -> {
                 eventEmitter.emitConnection(ConnectionEvent.KickedOffline(errMsg))
                 disconnect()

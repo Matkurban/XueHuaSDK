@@ -1,6 +1,8 @@
 package com.kurban.xuehuaim.sdk.manager
 
 import com.kurban.xuehuaim.sdk.db.DatabaseService
+import com.kurban.xuehuaim.sdk.db.SendingMessage
+import com.kurban.xuehuaim.sdk.enum.FavoriteType
 import com.kurban.xuehuaim.sdk.enum.ConnectionState
 import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.GroupAtType
@@ -28,7 +30,9 @@ import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.MergeElem
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
 import com.kurban.xuehuaim.sdk.model.MomentInfo
+import com.kurban.xuehuaim.sdk.model.MomentListResponse
 import com.kurban.xuehuaim.sdk.model.PictureElem
 import com.kurban.xuehuaim.sdk.model.PictureInfo
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
@@ -58,7 +62,12 @@ import com.kurban.xuehuaim.sdk.network.ws.WsRequest
 import com.kurban.xuehuaim.sdk.platform.currentPlatform
 import com.kurban.xuehuaim.sdk.platform.FileSystem
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
+import com.kurban.xuehuaim.sdk.platform.sdkScope
+import com.kurban.xuehuaim.sdk.sync.FavoriteSync
+import com.kurban.xuehuaim.sdk.sync.FriendSync
+import com.kurban.xuehuaim.sdk.sync.GroupSync
 import com.kurban.xuehuaim.sdk.sync.MessageDisplayEnricher
+import com.kurban.xuehuaim.sdk.sync.MomentSync
 import com.kurban.xuehuaim.sdk.util.ClientMsgIdGenerator
 import com.kurban.xuehuaim.sdk.util.ConversationMessageUpdater
 import com.kurban.xuehuaim.sdk.util.OpenImUtils
@@ -314,6 +323,20 @@ class MessageManager internal constructor(
                 conversationID = conversationId?.takeIf { it.isNotBlank() },
             ).withParsedContent()
             databaseService.insertOrReplaceMessage(sendingMessage)
+            val resolvedConversationId = conversationId?.takeIf { it.isNotBlank() }
+                ?: sendingMessage.conversationID.orEmpty().ifBlank {
+                    if (groupId.isNotEmpty()) {
+                        OpenImUtils.genGroupConversationID(groupId)
+                    } else {
+                        OpenImUtils.genSingleConversationID(selfUserId, recvId)
+                    }
+                }
+            databaseService.insertOrReplaceSendingMessage(
+                SendingMessage(
+                    clientMsgID = message.clientMsgID,
+                    conversationID = resolvedConversationId,
+                ),
+            )
             eventEmitter.emitMessage(
                 com.kurban.xuehuaim.sdk.event.MessageEvent.SendProgress(
                     clientMsgId = message.clientMsgID,
@@ -367,6 +390,7 @@ class MessageManager internal constructor(
                     messages = listOf(sent),
                 ).first()
                 databaseService.insertOrReplaceMessage(enriched)
+                databaseService.deleteSendingMessage(message.clientMsgID)
                 ConversationMessageUpdater.updateFromMessage(
                     databaseService = databaseService,
                     eventEmitter = eventEmitter,
@@ -386,6 +410,7 @@ class MessageManager internal constructor(
             } catch (e: Exception) {
                 val failed = sendingMessage.copy(status = MessageStatus.SEND_FAILED)
                 databaseService.insertOrReplaceMessage(failed)
+                databaseService.deleteSendingMessage(message.clientMsgID)
                 val code = (e as? XueHuaException)?.code ?: SdkErrorCode.MSG_SEND_FAILED.code
                 val error = e.message ?: SdkErrorCode.MSG_SEND_FAILED.message
                 eventEmitter.emitMessage(
@@ -707,6 +732,29 @@ class MessageManager internal constructor(
         path: String,
         onProgress: ((Int) -> Unit)? = null,
     ): Message = createFileMessageFromFullPath(fileSystem, fileUploadService, path, onProgress)
+
+    suspend fun createVideoMessageFromBytes(
+        bytes: ByteArray,
+        fileName: String,
+        duration: Int,
+        videoType: String? = null,
+        snapshotBytes: ByteArray? = null,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createVideoMessageFromBytes(
+        fileUploadService,
+        bytes,
+        fileName,
+        duration,
+        videoType,
+        snapshotBytes,
+        onProgress,
+    )
+
+    suspend fun createFileMessageFromBytes(
+        bytes: ByteArray,
+        fileName: String,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createFileMessageFromBytes(fileUploadService, bytes, fileName, onProgress)
 
     suspend fun recoverSendingMessages() =
         recoverSendingMessages(databaseService, eventEmitter, loginUserId)
@@ -1032,14 +1080,35 @@ class ConversationManager internal constructor(
 
 class FriendshipManager internal constructor(
     private val apiService: ImApiService,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: LoginUserIdProvider,
 ) {
-    suspend fun getFriendList(): List<FriendInfo> =
-        apiService.getFriendList(loginUserId.requireUserId())
+    suspend fun getFriendList(filterBlack: Boolean = false): List<FriendInfo> =
+        withContext(ioDispatcher) {
+            val userId = loginUserId.requireUserId()
+            var list = databaseService.getAllFriends()
+            if (list.isEmpty()) {
+                FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
+                list = databaseService.getAllFriends()
+            }
+            if (list.isEmpty()) {
+                list = apiService.getFriendList(userId)
+                databaseService.batchUpsertFriends(list)
+            }
+            if (filterBlack) {
+                val blackIds = databaseService.getBlackUserIds()
+                list.filter { it.userID !in blackIds }
+            } else {
+                list
+            }
+        }
 
-    suspend fun getFriendListPage(pageNumber: Int, pageSize: Int): List<FriendInfo> =
-        apiService.getFriendListPage(loginUserId.requireUserId(), pageNumber, pageSize)
+    suspend fun getFriendListPage(
+        filterBlack: Boolean = false,
+        offset: Int = 0,
+        count: Int = 40,
+    ): List<FriendInfo> = databaseService.getFriendsPage(offset, count, filterBlack)
 
     suspend fun addFriend(userId: String, reqMsg: String = "") = withContext(ioDispatcher) {
         apiService.addFriendRequest(userId, reqMsg)
@@ -1047,34 +1116,52 @@ class FriendshipManager internal constructor(
 
     suspend fun deleteFriend(userId: String) = withContext(ioDispatcher) {
         apiService.deleteFriend(loginUserId.requireUserId(), userId)
+        databaseService.deleteFriend(userId)
         eventEmitter.emitFriendship(
-            com.kurban.xuehuaim.sdk.event.FriendshipEvent.FriendDeleted(
-                userId
-            )
+            com.kurban.xuehuaim.sdk.event.FriendshipEvent.FriendDeleted(userId),
         )
     }
 
     suspend fun getFriendApplications(): List<FriendApplicationInfo> =
         apiService.getFriendApplications(loginUserId.requireUserId())
 
-    suspend fun respondFriendApplication(
+    suspend fun acceptFriendApplication(toUserID: String, handleMsg: String = "") =
+        respondFriendApplication(toUserID, accept = true, handleMsg)
+
+    suspend fun refuseFriendApplication(toUserID: String, handleMsg: String = "") =
+        respondFriendApplication(toUserID, accept = false, handleMsg)
+
+    private suspend fun respondFriendApplication(
         toUserID: String,
         accept: Boolean,
-        handleMsg: String = ""
-    ) =
-        withContext(ioDispatcher) {
-            apiService.respondFriendApplication(toUserID, accept, handleMsg)
-        }
-
-    suspend fun getBlackList(): List<BlacklistInfo> =
-        apiService.getBlackList(loginUserId.requireUserId())
-
-    suspend fun addBlack(userID: String) = withContext(ioDispatcher) {
-        apiService.addBlack(loginUserId.requireUserId(), userID)
+        handleMsg: String,
+    ) = withContext(ioDispatcher) {
+        apiService.respondFriendApplication(toUserID, accept, handleMsg)
+        FriendSync.syncFriends(apiService, databaseService, eventEmitter, loginUserId.requireUserId())
     }
 
-    suspend fun removeBlack(userID: String) = withContext(ioDispatcher) {
+    suspend fun getBlacklist(): List<BlacklistInfo> = withContext(ioDispatcher) {
+        val userId = loginUserId.requireUserId()
+        var list = databaseService.getBlackList()
+        if (list.isEmpty()) {
+            FriendSync.syncBlackList(apiService, databaseService, userId)
+            list = databaseService.getBlackList()
+        }
+        if (list.isEmpty()) {
+            list = apiService.getBlackList(userId)
+            list.forEach { databaseService.insertOrReplaceBlack(it) }
+        }
+        list
+    }
+
+    suspend fun addBlacklist(userID: String, ex: String? = null) = withContext(ioDispatcher) {
+        apiService.addBlack(loginUserId.requireUserId(), userID)
+        FriendSync.syncBlackList(apiService, databaseService, loginUserId.requireUserId())
+    }
+
+    suspend fun removeBlacklist(userID: String) = withContext(ioDispatcher) {
         apiService.removeBlack(loginUserId.requireUserId(), userID)
+        databaseService.deleteBlack(userID)
     }
 
     suspend fun searchUsers(keyword: String): List<UserInfo> = apiService.searchUsers(keyword)
@@ -1107,27 +1194,43 @@ class FriendshipManager internal constructor(
 
 class GroupManager internal constructor(
     private val apiService: ImApiService,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: LoginUserIdProvider,
 ) {
-    suspend fun getJoinedGroupList(): List<GroupInfo> =
-        apiService.getJoinedGroupList(loginUserId.requireUserId())
+    suspend fun getJoinedGroupList(): List<GroupInfo> = withContext(ioDispatcher) {
+        val userId = loginUserId.requireUserId()
+        var groups = databaseService.getAllGroups()
+        if (groups.isEmpty()) {
+            GroupSync.syncJoinedGroups(apiService, databaseService, eventEmitter, userId)
+            groups = databaseService.getAllGroups()
+        }
+        if (groups.isEmpty()) {
+            groups = apiService.getJoinedGroupList(userId)
+            databaseService.batchUpsertGroups(groups)
+        }
+        groups
+    }
 
     suspend fun createGroup(groupName: String, memberUserIds: List<String>): GroupInfo =
         withContext(ioDispatcher) {
             val group = apiService.createGroup(groupName, memberUserIds)
+            databaseService.insertOrReplaceGroup(group)
             eventEmitter.emitGroup(com.kurban.xuehuaim.sdk.event.GroupEvent.GroupInfoChanged(group))
             group
         }
 
     suspend fun dismissGroup(groupId: String) = withContext(ioDispatcher) {
         apiService.dismissGroup(groupId)
+        databaseService.deleteGroupMembers(groupId)
+        databaseService.deleteGroup(groupId)
         eventEmitter.emitGroup(com.kurban.xuehuaim.sdk.event.GroupEvent.GroupDismissed(groupId))
     }
 
     suspend fun quitGroup(groupId: String) = withContext(ioDispatcher) {
         val userId = loginUserId.requireUserId()
         apiService.quitGroup(userId, groupId)
+        GroupSync.syncJoinedGroups(apiService, databaseService, eventEmitter, userId)
         eventEmitter.emitGroup(com.kurban.xuehuaim.sdk.event.GroupEvent.GroupDismissed(groupId))
     }
 
@@ -1136,18 +1239,43 @@ class GroupManager internal constructor(
 
     suspend fun setGroupInfo(groupInfo: GroupInfo) = withContext(ioDispatcher) {
         apiService.setGroupInfoEx(groupInfo)
+        databaseService.insertOrReplaceGroup(groupInfo)
         eventEmitter.emitGroup(com.kurban.xuehuaim.sdk.event.GroupEvent.GroupInfoChanged(groupInfo))
     }
 
-    suspend fun getGroupMembers(groupId: String): List<GroupMemberInfo> =
-        apiService.getGroupMembers(groupId)
-
-    suspend fun inviteToGroup(groupId: String, userIds: List<String>) = withContext(ioDispatcher) {
-        apiService.inviteToGroup(groupId, userIds)
+    suspend fun getGroupMemberList(
+        groupID: String,
+        filter: Int = 0,
+        offset: Int = 0,
+        count: Int = 40,
+    ): List<GroupMemberInfo> = withContext(ioDispatcher) {
+        GroupSync.ensureGroupMembersSynced(apiService, databaseService, groupID)
+        val page = databaseService.getGroupMembersPage(groupID, offset, count, filter)
+        if (page.isNotEmpty()) return@withContext page
+        apiService.getGroupMembers(groupID).let { members ->
+            databaseService.batchUpsertGroupMembers(members)
+            members.drop(offset).take(count).let { fallback ->
+                if (filter <= 0) fallback else fallback.filter { it.roleLevel?.value == filter }
+            }
+        }
     }
 
-    suspend fun kickGroupMember(groupId: String, userId: String) = withContext(ioDispatcher) {
-        apiService.kickGroupMember(groupId, userId)
+    suspend fun inviteUserToGroup(
+        groupID: String,
+        userIDList: List<String>,
+        reason: String? = null,
+    ) = withContext(ioDispatcher) {
+        apiService.inviteToGroup(groupID, userIDList)
+        GroupSync.syncGroupInfoAndMembers(apiService, databaseService, groupID)
+    }
+
+    suspend fun kickGroupMember(
+        groupID: String,
+        userIDList: List<String>,
+        reason: String? = null,
+    ) = withContext(ioDispatcher) {
+        apiService.kickGroupMember(groupID, userIDList, reason)
+        GroupSync.syncGroupInfoAndMembers(apiService, databaseService, groupID)
     }
 
     suspend fun getGroupApplicationListAsRecipient(
@@ -1170,6 +1298,12 @@ class GroupManager internal constructor(
         ex: String = "",
     ) = withContext(ioDispatcher) {
         apiService.joinGroup(groupId, reqMessage, joinSource, inviterUserID, ex)
+        GroupSync.syncJoinedGroups(
+            apiService,
+            databaseService,
+            eventEmitter,
+            loginUserId.requireUserId(),
+        )
     }
 
     suspend fun acceptGroupApplication(
@@ -1178,6 +1312,7 @@ class GroupManager internal constructor(
         handleMsg: String = "",
     ) = withContext(ioDispatcher) {
         apiService.groupApplicationResponse(groupId, userId, handleMsg, handleResult = 1)
+        GroupSync.syncGroupInfoAndMembers(apiService, databaseService, groupId)
     }
 
     suspend fun refuseGroupApplication(
@@ -1193,7 +1328,7 @@ class GroupManager internal constructor(
             apiService.getGroupApplicationUnhandledCount(loginUserId.requireUserId(), time)
         }
 
-    suspend fun getJoinedGroupListPage(pageNumber: Int, pageSize: Int): List<GroupInfo> =
+    suspend fun getJoinedGroupListPage(pageNumber: Int = 1, pageSize: Int = 40): List<GroupInfo> =
         getJoinedGroupListPage(apiService, loginUserId, pageNumber, pageSize)
 
     suspend fun isJoinedGroup(groupId: String): Boolean =
@@ -1221,11 +1356,34 @@ class GroupManager internal constructor(
     suspend fun transferGroupOwner(groupId: String, newOwnerUserId: String) =
         transferGroupOwner(apiService, groupId, newOwnerUserId)
 
-    suspend fun getGroupMemberListByJoinTime(groupId: String): List<GroupMemberInfo> =
-        getGroupMemberListByJoinTime(apiService, groupId)
+    suspend fun getGroupMemberListByJoinTime(
+        groupID: String,
+        offset: Int = 0,
+        count: Int = 0,
+        joinTimeBegin: Long = 0,
+        joinTimeEnd: Long = 0,
+        filterUserIDList: List<String> = emptyList(),
+    ): List<GroupMemberInfo> = withContext(ioDispatcher) {
+        GroupSync.ensureGroupMembersSynced(apiService, databaseService, groupID)
+        val pageCount = if (count == 0) 40 else count
+        var members = databaseService.getGroupMembersPage(groupID, offset, pageCount)
+        if (joinTimeBegin > 0 || joinTimeEnd > 0) {
+            members = members.filter { member ->
+                val joinTime = member.joinTime ?: 0
+                (joinTimeBegin <= 0 || joinTime >= joinTimeBegin) &&
+                    (joinTimeEnd <= 0 || joinTime <= joinTimeEnd)
+            }
+        }
+        if (filterUserIDList.isNotEmpty()) {
+            members = members.filter { it.userID !in filterUserIDList }
+        }
+        members
+    }
 
-    suspend fun getUsersInGroup(groupId: String, userIds: List<String>): List<GroupMemberInfo> =
-        getUsersInGroup(apiService, groupId, userIds)
+    suspend fun getUsersInGroup(groupID: String, userIDList: List<String>): List<String> =
+        withContext(ioDispatcher) {
+            getGroupMembersInfo(apiService, groupID, userIDList).map { it.userID }
+        }
 
     suspend fun changeGroupMute(groupId: String, isMute: Boolean) =
         changeGroupMute(apiService, groupId, isMute)
@@ -1435,12 +1593,18 @@ class UserManager internal constructor(
         phoneNumber,
         email,
     )
+
+    suspend fun deleteAccount(currentPassword: String) = withContext(ioDispatcher) {
+        apiService.deleteAccount(currentPassword)
+    }
 }
 
 class MomentsManager internal constructor(
     private val apiService: ImApiService,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: LoginUserIdProvider,
+    private val scope: CoroutineScope = sdkScope,
 ) {
     suspend fun createMoment(content: String): MomentInfo {
         val moment = apiService.createMoment(content = content)
@@ -1450,15 +1614,23 @@ class MomentsManager internal constructor(
 
     suspend fun deleteMoment(momentId: String) = withContext(ioDispatcher) {
         apiService.deleteMoment(momentId)
+        databaseService.deleteMoment(momentId)
         eventEmitter.emitMoments(com.kurban.xuehuaim.sdk.event.MomentsEvent.MomentDeleted(momentId))
     }
 
-    suspend fun getMomentsList(page: Int = 1, size: Int = 20): List<MomentInfo> =
-        apiService.getMomentsList(
-            ownerUserID = "",
-            pageNumber = page,
-            showNumber = size,
-        )
+    suspend fun getMomentList(
+        ownerUserID: String? = null,
+        pageNumber: Int = 1,
+        showNumber: Int = 20,
+    ): MomentListResponse = MomentSync.getMomentList(
+        apiService = apiService,
+        databaseService = databaseService,
+        eventEmitter = eventEmitter,
+        scope = scope,
+        ownerUserID = ownerUserID,
+        pageNumber = pageNumber,
+        showNumber = showNumber,
+    )
 
     suspend fun likeMoment(momentId: String) = withContext(ioDispatcher) {
         val like = apiService.likeMoment(momentId, ownerUserID = loginUserId())
@@ -1489,13 +1661,26 @@ class MomentsManager internal constructor(
     }
 
     suspend fun fetchMomentListFromServer(
-        ownerUserId: String = "",
-        page: Int = 1,
-        size: Int = 20,
-    ): List<MomentInfo> = fetchMomentListFromServer(apiService, ownerUserId, page, size)
+        ownerUserID: String? = null,
+        pageNumber: Int = 1,
+        showNumber: Int = 20,
+    ): MomentListResponse = MomentSync.fetchMomentListFromServer(
+        apiService = apiService,
+        databaseService = databaseService,
+        eventEmitter = eventEmitter,
+        ownerUserID = ownerUserID,
+        pageNumber = pageNumber,
+        showNumber = showNumber,
+    )
 
-    suspend fun syncFromServer(page: Int = 1, size: Int = 20): List<MomentInfo> =
-        syncFromServer(apiService, page, size)
+    suspend fun syncFromServer(pageNumber: Int = 1, showNumber: Int = 20): List<MomentInfo> =
+        MomentSync.syncFromServer(
+            apiService,
+            databaseService,
+            eventEmitter,
+            pageNumber,
+            showNumber,
+        )
 
     suspend fun handleNotification(key: String, data: Map<String, String>) =
         handleNotification(eventEmitter, key, data)
@@ -1503,18 +1688,25 @@ class MomentsManager internal constructor(
 
 class FavoriteManager internal constructor(
     private val apiService: ImApiService,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
 ) {
-    suspend fun getFavoriteList(): List<FavoriteItem> = apiService.getFavoriteList()
+    suspend fun getFavoriteList(): List<FavoriteItem> = withContext(ioDispatcher) {
+        val local = databaseService.getFavoritesPage(0, 1000)
+        if (local.isNotEmpty()) return@withContext local
+        FavoriteSync.syncFromServer(apiService, databaseService, eventEmitter)
+    }
 
     suspend fun addFavorite(item: FavoriteItem) = withContext(ioDispatcher) {
         val saved = apiService.addFavorite(item)
+        databaseService.batchUpsertFavorites(listOf(saved))
         eventEmitter.emitFavorite(com.kurban.xuehuaim.sdk.event.FavoriteEvent.Added(saved))
         saved
     }
 
     suspend fun deleteFavorite(favoriteId: String) = withContext(ioDispatcher) {
         apiService.deleteFavorite(favoriteId)
+        databaseService.deleteFavorite(favoriteId)
         eventEmitter.emitFavorite(com.kurban.xuehuaim.sdk.event.FavoriteEvent.Deleted(favoriteId))
     }
 
@@ -1522,7 +1714,7 @@ class FavoriteManager internal constructor(
         fetchFavoriteListFromServer(apiService, pageNumber, showNumber)
 
     suspend fun syncFromServer(pageNumber: Int = 1, showNumber: Int = 100): List<FavoriteItem> =
-        syncFromServer(apiService, pageNumber, showNumber)
+        FavoriteSync.syncFromServer(apiService, databaseService, eventEmitter, pageNumber, showNumber)
 
     suspend fun isFavorited(targetType: String, targetId: String): Boolean =
         isFavorited(apiService, targetType, targetId)
@@ -1533,20 +1725,26 @@ class FavoriteManager internal constructor(
     suspend fun isMomentFavorited(momentId: String): Boolean =
         isMomentFavorited(apiService, momentId)
 
-    suspend fun addMessage(clientMsgId: String, data: String? = null) =
-        addMessage(apiService, eventEmitter, clientMsgId, data)
+    suspend fun addMessage(message: Message) =
+        addMessage(apiService, eventEmitter, message)
 
     suspend fun removeMessage(clientMsgId: String) =
         removeMessage(apiService, eventEmitter, clientMsgId)
 
-    suspend fun addMoment(momentId: String, data: String? = null) =
-        addMoment(apiService, eventEmitter, momentId, data)
+    suspend fun addMoment(moment: MomentInfo) =
+        addMoment(apiService, eventEmitter, moment)
 
     suspend fun removeMoment(momentId: String) =
         removeMoment(apiService, eventEmitter, momentId)
 
-    suspend fun addNote(noteId: String, data: String) =
-        addNote(apiService, eventEmitter, noteId, data)
+    suspend fun addMomentComment(comment: MomentCommentWithUser): FavoriteItem? =
+        addMomentComment(apiService, eventEmitter, comment)
+
+    suspend fun removeMomentComment(commentID: String): Boolean =
+        removeMomentComment(apiService, eventEmitter, commentID)
+
+    suspend fun addNote(title: String, content: String) =
+        addNote(apiService, eventEmitter, title, content)
 
     suspend fun updateNote(favoriteId: String, data: String) =
         updateNote(apiService, eventEmitter, favoriteId, data)
@@ -1674,20 +1872,6 @@ class ApplicationManager internal constructor(
     private val apiService: ImApiService,
 ) {
     suspend fun checkVersion(): ApplicationVersionInfo = apiService.checkAppVersion()
-
-    suspend fun changePassword(userID: String, currentPassword: String, newPassword: String) =
-        apiService.changePassword(userID, currentPassword, newPassword)
-
-    suspend fun deleteAccount(currentPassword: String) = apiService.deleteAccount(currentPassword)
-
-    suspend fun getPointsBalance(): Double = apiService.getPointsBalance()
-
-    suspend fun getPointsTransactions(
-        pageNumber: Int = 1,
-        showNumber: Int = 20,
-        txType: Int? = null,
-    ): Pair<Int, List<PointsTransaction>> =
-        apiService.getPointsTransactions(pageNumber, showNumber, txType)
 
     suspend fun getLatestVersion(
         platform: String,

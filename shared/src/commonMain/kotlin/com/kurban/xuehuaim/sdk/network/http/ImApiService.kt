@@ -25,6 +25,7 @@ import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.JoinMeetingResult
 import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.model.MomentInfo
+import com.kurban.xuehuaim.sdk.model.MomentListResponse
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
 import com.kurban.xuehuaim.sdk.model.RedPacketDetail
 import com.kurban.xuehuaim.sdk.model.ReportInfo
@@ -56,6 +57,7 @@ internal object ImApiRoutes {
     const val GET_CONVERSATIONS = "/conversation/get_conversations"
     const val SET_CONVERSATIONS = "/conversation/set_conversations"
     const val GET_FRIENDS = "/friend/get_friend_list"
+    const val GET_INCREMENTAL_FRIENDS = "/friend/get_incremental_friends"
     const val ADD_FRIEND = "/friend/add_friend"
     const val DELETE_FRIEND = "/friend/delete_friend"
     const val GET_FRIEND_APPLICATIONS = "/friend/get_friend_apply_list"
@@ -70,6 +72,7 @@ internal object ImApiRoutes {
     const val GET_BLACK_LIST = "/friend/get_black_list"
     const val CREATE_GROUP = "/group/create_group"
     const val GET_JOINED_GROUPS = "/group/get_joined_group_list"
+    const val GET_INCREMENTAL_JOIN_GROUP = "/group/get_incremental_join_groups"
     const val GET_GROUP_INFO = "/group/get_groups_info"
     const val SET_GROUP_INFO = "/group/set_group_info"
     const val SET_GROUP_INFO_EX = "/group/set_group_info_ex"
@@ -504,6 +507,26 @@ internal data class IncrementalConversationReq(
 )
 
 @Serializable
+internal data class IncrementalFriendsResp(
+    @SerialName("full") val full: Boolean = false,
+    @SerialName("versionID") val versionID: String = "",
+    @SerialName("version") val version: Int = 0,
+    @SerialName("delete") val delete: List<String>? = null,
+    @SerialName("insert") val insert: List<FriendInfoDto>? = null,
+    @SerialName("update") val update: List<FriendInfoDto>? = null,
+)
+
+@Serializable
+internal data class IncrementalJoinGroupResp(
+    @SerialName("full") val full: Boolean = false,
+    @SerialName("versionID") val versionID: String = "",
+    @SerialName("version") val version: Int = 0,
+    @SerialName("delete") val delete: List<String>? = null,
+    @SerialName("insert") val insert: List<GroupInfo>? = null,
+    @SerialName("update") val update: List<GroupInfo>? = null,
+)
+
+@Serializable
 internal data class IncrementalConversationResp(
     @SerialName("full") val full: Boolean = false,
     @SerialName("versionID") val versionID: String = "",
@@ -925,6 +948,24 @@ internal class ImApiService(
         IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
     )
 
+    suspend fun getIncrementalFriends(
+        userID: String,
+        version: Int,
+        versionID: String,
+    ): IncrementalFriendsResp = httpClient.imPostEnvelope(
+        ImApiRoutes.GET_INCREMENTAL_FRIENDS,
+        IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
+    )
+
+    suspend fun getIncrementalJoinGroup(
+        userID: String,
+        version: Int,
+        versionID: String,
+    ): IncrementalJoinGroupResp = httpClient.imPostEnvelope(
+        ImApiRoutes.GET_INCREMENTAL_JOIN_GROUP,
+        IncrementalConversationReq(userID = userID, version = version, versionID = versionID),
+    )
+
     suspend fun getConversationsHasReadAndMaxSeq(
         userID: String,
         conversationIDs: List<String>,
@@ -1175,10 +1216,14 @@ internal class ImApiService(
         )
     }
 
-    suspend fun kickGroupMember(groupID: String, userID: String) {
+    suspend fun kickGroupMember(groupID: String, userIDs: List<String>, reason: String? = null) {
         httpClient.imPostVoid(
             ImApiRoutes.KICK_GROUP_MEMBER,
-            mapOf("groupID" to groupID, "kickedUserIDs" to userID),
+            buildMap {
+                put("groupID", groupID)
+                put("kickedUserIDs", userIDs)
+                reason?.let { put("reason", it) }
+            },
         )
     }
 
@@ -1210,7 +1255,7 @@ internal class ImApiService(
         ownerUserID: String = "",
         pageNumber: Int = 1,
         showNumber: Int = 20,
-    ): List<MomentInfo> {
+    ): MomentListResponse {
         val resp: MomentListResp = httpClient.chatPostEnvelope(
             ChatApiRoutes.MOMENT_LIST,
             MomentListReq(
@@ -1219,7 +1264,7 @@ internal class ImApiService(
                 showNumber = showNumber
             ),
         )
-        return resp.moments
+        return MomentListResponse(total = resp.total, moments = resp.moments)
     }
 
     suspend fun likeMoment(momentID: String, ownerUserID: String? = null): MomentLike =

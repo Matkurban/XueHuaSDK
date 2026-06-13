@@ -22,6 +22,20 @@ enum class TokenCheckResult {
     NetworkError,
 }
 
+enum class FavoriteType(val value: String) {
+    MESSAGE("message"),
+    MOMENT_CONTENT("moment_content"),
+    MOMENT_COMMENT("moment_comment"),
+    LINK("link"),
+    NOTE("note"),
+    ;
+
+    companion object {
+        fun fromValue(value: String?): FavoriteType =
+            entries.find { it.value == value } ?: MESSAGE
+    }
+}
+
 @Serializable
 enum class IMPlatform(val value: Int) {
     IOS(1),
@@ -147,6 +161,7 @@ enum class MessageType(val value: Int) {
     CUSTOM_FACE(115),
     ADVANCED_TEXT(117),
     MARKDOWN_TEXT(118),
+    CUSTOM_MSG_ONLINE_ONLY(120),
     CALL_SIGNAL(124),
     RED_PACKET(125),
     RED_PACKET_GRAB_NOTIFY(126),

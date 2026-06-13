@@ -1,7 +1,13 @@
 package com.kurban.xuehuaim.sdk.db
 
+import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
+import com.kurban.xuehuaim.sdk.model.FavoriteItem
+import com.kurban.xuehuaim.sdk.model.FriendInfo
+import com.kurban.xuehuaim.sdk.model.GroupInfo
+import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import kotlinx.coroutines.sync.Mutex
@@ -17,6 +23,14 @@ internal class InMemoryImDatabase : ImDatabase {
     private val grabbedRedPackets = mutableMapOf<String, Long>()
     private val kvStore = mutableMapOf<Pair<String, Boolean>, String?>()
     private val sendingMessages = mutableListOf<SendingMessage>()
+    private val friends = mutableListOf<FriendInfo>()
+    private val blacks = mutableListOf<BlacklistInfo>()
+    private val groups = mutableListOf<GroupInfo>()
+    private val groupMembers = mutableListOf<GroupMemberInfo>()
+    private val moments = mutableListOf<MomentInfo>()
+    private val favorites = mutableListOf<FavoriteItem>()
+    private val uploads = mutableMapOf<String, UploadRecord>()
+    private val notificationSeqs = mutableMapOf<String, Long>()
 
     override suspend fun close() = Unit
 
@@ -282,4 +296,292 @@ internal class InMemoryImDatabase : ImDatabase {
             Unit
         }
     }
+
+    override suspend fun getAllFriends(): List<FriendInfo> = withContext(ioDispatcher) {
+        mutex.withLock { friends.sortedByDescending { it.createTime ?: 0 }.toList() }
+    }
+
+    override suspend fun getFriendsPage(offset: Int, count: Int): List<FriendInfo> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                friends.sortedByDescending { it.createTime ?: 0 }.drop(offset).take(count)
+            }
+        }
+
+    override suspend fun getFriendByUserId(userId: String): FriendInfo? = withContext(ioDispatcher) {
+        mutex.withLock { friends.find { it.userID == userId } }
+    }
+
+    override suspend fun insertOrReplaceFriend(friend: FriendInfo) = withContext(ioDispatcher) {
+        mutex.withLock {
+            friends.removeAll { it.userID == friend.userID }
+            friends.add(friend)
+            Unit
+        }
+    }
+
+    override suspend fun batchUpsertFriends(friendsList: List<FriendInfo>) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                friendsList.forEach { friend ->
+                    friends.removeAll { it.userID == friend.userID }
+                    friends.add(friend)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun deleteFriend(userId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            friends.removeAll { it.userID == userId }
+            Unit
+        }
+    }
+
+    override suspend fun deleteAllFriends() = withContext(ioDispatcher) {
+        mutex.withLock {
+            friends.clear()
+            Unit
+        }
+    }
+
+    override suspend fun getBlackList(): List<BlacklistInfo> = withContext(ioDispatcher) {
+        mutex.withLock { blacks.toList() }
+    }
+
+    override suspend fun getBlackUserIds(): Set<String> = withContext(ioDispatcher) {
+        mutex.withLock { blacks.map { it.blockUserID }.toSet() }
+    }
+
+    override suspend fun insertOrReplaceBlack(black: BlacklistInfo) = withContext(ioDispatcher) {
+        mutex.withLock {
+            blacks.removeAll { it.blockUserID == black.blockUserID }
+            blacks.add(black)
+            Unit
+        }
+    }
+
+    override suspend fun deleteBlack(blockUserId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            blacks.removeAll { it.blockUserID == blockUserId }
+            Unit
+        }
+    }
+
+    override suspend fun deleteAllBlacks() = withContext(ioDispatcher) {
+        mutex.withLock {
+            blacks.clear()
+            Unit
+        }
+    }
+
+    override suspend fun getAllGroups(): List<GroupInfo> = withContext(ioDispatcher) {
+        mutex.withLock { groups.sortedByDescending { it.createTime ?: 0 }.toList() }
+    }
+
+    override suspend fun insertOrReplaceGroup(group: GroupInfo) = withContext(ioDispatcher) {
+        mutex.withLock {
+            groups.removeAll { it.groupID == group.groupID }
+            groups.add(group)
+            Unit
+        }
+    }
+
+    override suspend fun batchUpsertGroups(groupsList: List<GroupInfo>) = withContext(ioDispatcher) {
+        mutex.withLock {
+            groupsList.forEach { group ->
+                groups.removeAll { it.groupID == group.groupID }
+                groups.add(group)
+            }
+            Unit
+        }
+    }
+
+    override suspend fun deleteGroup(groupId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            groups.removeAll { it.groupID == groupId }
+            Unit
+        }
+    }
+
+    override suspend fun getGroupMembersPage(
+        groupId: String,
+        offset: Int,
+        count: Int,
+    ): List<GroupMemberInfo> = withContext(ioDispatcher) {
+        mutex.withLock {
+            groupMembers.filter { it.groupID == groupId }
+                .sortedBy { it.joinTime ?: 0 }
+                .drop(offset)
+                .take(count)
+        }
+    }
+
+    override suspend fun insertOrReplaceGroupMember(member: GroupMemberInfo) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                groupMembers.removeAll { it.groupID == member.groupID && it.userID == member.userID }
+                groupMembers.add(member)
+                Unit
+            }
+        }
+
+    override suspend fun batchUpsertGroupMembers(members: List<GroupMemberInfo>) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                members.forEach { member ->
+                    groupMembers.removeAll { it.groupID == member.groupID && it.userID == member.userID }
+                    groupMembers.add(member)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun deleteGroupMembers(groupId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            groupMembers.removeAll { it.groupID == groupId }
+            Unit
+        }
+    }
+
+    override suspend fun getMomentsPage(offset: Int, count: Int): List<MomentInfo> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                moments.sortedByDescending { it.createTime.orEmpty() }.drop(offset).take(count)
+            }
+        }
+
+    override suspend fun getMomentsByUserIdPage(
+        userId: String,
+        offset: Int,
+        count: Int,
+    ): List<MomentInfo> = withContext(ioDispatcher) {
+        mutex.withLock {
+            moments.filter { it.userID == userId }
+                .sortedByDescending { it.createTime.orEmpty() }
+                .drop(offset)
+                .take(count)
+        }
+    }
+
+    override suspend fun insertOrReplaceMoment(moment: MomentInfo) = withContext(ioDispatcher) {
+        mutex.withLock {
+            moments.removeAll { it.momentID == moment.momentID }
+            moments.add(moment)
+            Unit
+        }
+    }
+
+    override suspend fun batchUpsertMoments(momentsList: List<MomentInfo>) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                momentsList.forEach { moment ->
+                    moments.removeAll { it.momentID == moment.momentID }
+                    moments.add(moment)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun deleteMoment(momentId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            moments.removeAll { it.momentID == momentId }
+            Unit
+        }
+    }
+
+    override suspend fun deleteAllMoments() = withContext(ioDispatcher) {
+        mutex.withLock {
+            moments.clear()
+            Unit
+        }
+    }
+
+    override suspend fun getFavoritesPage(offset: Int, count: Int): List<FavoriteItem> =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                favorites.sortedByDescending { it.createTime ?: 0 }.drop(offset).take(count)
+            }
+        }
+
+    override suspend fun insertOrReplaceFavorite(item: FavoriteItem) = withContext(ioDispatcher) {
+        mutex.withLock {
+            favorites.removeAll { it.favoriteID == item.favoriteID }
+            favorites.add(item)
+            Unit
+        }
+    }
+
+    override suspend fun batchUpsertFavorites(items: List<FavoriteItem>) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                items.forEach { item ->
+                    favorites.removeAll { it.favoriteID == item.favoriteID }
+                    favorites.add(item)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun deleteFavorite(favoriteId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            favorites.removeAll { it.favoriteID == favoriteId }
+            Unit
+        }
+    }
+
+    override suspend fun deleteFavoriteByTarget(targetType: String, targetId: String) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                favorites.removeAll { it.targetType == targetType && it.targetID == targetId }
+                Unit
+            }
+        }
+
+    override suspend fun insertOrReplaceSendingMessage(record: SendingMessage) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                sendingMessages.removeAll { it.clientMsgID == record.clientMsgID }
+                sendingMessages.add(record)
+                Unit
+            }
+        }
+
+    override suspend fun deleteSendingMessage(clientMsgId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            sendingMessages.removeAll { it.clientMsgID == clientMsgId }
+            Unit
+        }
+    }
+
+    override suspend fun insertOrReplaceUpload(record: UploadRecord) = withContext(ioDispatcher) {
+        mutex.withLock {
+            uploads[record.uploadID] = record
+            Unit
+        }
+    }
+
+    override suspend fun getUpload(uploadId: String): UploadRecord? = withContext(ioDispatcher) {
+        mutex.withLock { uploads[uploadId] }
+    }
+
+    override suspend fun deleteUpload(uploadId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            uploads.remove(uploadId)
+            Unit
+        }
+    }
+
+    override suspend fun getNotificationSeq(conversationId: String): Long =
+        withContext(ioDispatcher) {
+            mutex.withLock { notificationSeqs[conversationId] ?: 0L }
+        }
+
+    override suspend fun setNotificationSeq(conversationId: String, seq: Long) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                notificationSeqs[conversationId] = seq
+                Unit
+            }
+        }
 }

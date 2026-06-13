@@ -1,7 +1,13 @@
 package com.kurban.xuehuaim.sdk.db
 
+import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
+import com.kurban.xuehuaim.sdk.model.FavoriteItem
+import com.kurban.xuehuaim.sdk.model.FriendInfo
+import com.kurban.xuehuaim.sdk.model.GroupInfo
+import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.SpaceInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.DatabaseDriverFactory
@@ -225,5 +231,86 @@ class DatabaseService(
             val matchesEnd = endTime == null || time <= endTime
             matchesKeyword && matchesType && matchesStart && matchesEnd
         }.drop(offset).take(count)
+    }
+
+    suspend fun getAllFriends(): List<FriendInfo> = db().getAllFriends()
+
+    suspend fun getFriendsPage(offset: Int, count: Int, filterBlack: Boolean = false): List<FriendInfo> {
+        val page = db().getFriendsPage(offset, count)
+        if (!filterBlack) return page
+        val blackIds = db().getBlackUserIds()
+        return page.filter { it.userID !in blackIds }
+    }
+
+    suspend fun getFriendByUserId(userId: String): FriendInfo? = db().getFriendByUserId(userId)
+
+    suspend fun insertOrReplaceFriend(friend: FriendInfo) = db().insertOrReplaceFriend(friend)
+
+    suspend fun batchUpsertFriends(friends: List<FriendInfo>) = db().batchUpsertFriends(friends)
+
+    suspend fun deleteFriend(userId: String) = db().deleteFriend(userId)
+
+    suspend fun getBlackList(): List<BlacklistInfo> = db().getBlackList()
+
+    suspend fun getBlackUserIds(): Set<String> = db().getBlackUserIds()
+
+    suspend fun insertOrReplaceBlack(black: BlacklistInfo) = db().insertOrReplaceBlack(black)
+
+    suspend fun deleteBlack(blockUserId: String) = db().deleteBlack(blockUserId)
+
+    suspend fun getAllGroups(): List<GroupInfo> = db().getAllGroups()
+
+    suspend fun insertOrReplaceGroup(group: GroupInfo) = db().insertOrReplaceGroup(group)
+
+    suspend fun batchUpsertGroups(groups: List<GroupInfo>) = db().batchUpsertGroups(groups)
+
+    suspend fun deleteGroup(groupId: String) = db().deleteGroup(groupId)
+
+    suspend fun getGroupMembersPage(
+        groupId: String,
+        offset: Int,
+        count: Int,
+        filter: Int = 0,
+    ): List<GroupMemberInfo> {
+        val page = db().getGroupMembersPage(groupId, offset, count)
+        if (filter <= 0) return page
+        return page.filter { it.roleLevel?.value == filter }
+    }
+
+    suspend fun batchUpsertGroupMembers(members: List<GroupMemberInfo>) =
+        db().batchUpsertGroupMembers(members)
+
+    suspend fun deleteGroupMembers(groupId: String) = db().deleteGroupMembers(groupId)
+
+    suspend fun getMomentsPage(offset: Int, count: Int): List<MomentInfo> =
+        db().getMomentsPage(offset, count)
+
+    suspend fun getMomentsByUserIdPage(userId: String, offset: Int, count: Int): List<MomentInfo> =
+        db().getMomentsByUserIdPage(userId, offset, count)
+
+    suspend fun batchUpsertMoments(moments: List<MomentInfo>) = db().batchUpsertMoments(moments)
+
+    suspend fun deleteMoment(momentId: String) = db().deleteMoment(momentId)
+
+    suspend fun getFavoritesPage(offset: Int, count: Int): List<FavoriteItem> =
+        db().getFavoritesPage(offset, count)
+
+    suspend fun batchUpsertFavorites(items: List<FavoriteItem>) = db().batchUpsertFavorites(items)
+
+    suspend fun deleteFavorite(favoriteId: String) = db().deleteFavorite(favoriteId)
+
+    suspend fun deleteFavoriteByTarget(targetType: String, targetId: String) =
+        db().deleteFavoriteByTarget(targetType, targetId)
+
+    suspend fun insertOrReplaceSendingMessage(record: SendingMessage) =
+        db().insertOrReplaceSendingMessage(record)
+
+    suspend fun deleteSendingMessage(clientMsgId: String) = db().deleteSendingMessage(clientMsgId)
+
+    suspend fun markConversationNotInGroup(groupId: String) {
+        val conversationId = OpenImUtils.genGroupConversationID(groupId)
+        getConversation(conversationId)?.let { conv ->
+            insertOrReplaceConversation(conv.copy(isNotInGroup = true))
+        }
     }
 }

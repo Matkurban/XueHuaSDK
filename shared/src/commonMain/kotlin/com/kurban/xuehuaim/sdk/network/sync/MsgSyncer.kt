@@ -13,6 +13,8 @@ import com.kurban.xuehuaim.sdk.network.notify.NotificationDispatcher
 import com.kurban.xuehuaim.sdk.network.ws.WebSocketService
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.ConversationSync
+import com.kurban.xuehuaim.sdk.sync.FriendSync
+import com.kurban.xuehuaim.sdk.sync.GroupSync
 import com.kurban.xuehuaim.sdk.sync.MessageDisplayEnricher
 import com.kurban.xuehuaim.sdk.util.ConversationMessageUpdater
 import com.kurban.xuehuaim.sdk.util.SdkLogger
@@ -48,12 +50,18 @@ internal class MsgSyncer(
         if (userId.isEmpty()) return@withContext
         eventEmitter.emitConversation(ConversationEvent.SyncStarted)
         try {
+            eventEmitter.emitConversation(ConversationEvent.SyncProgress(10))
             ConversationSync.syncFromServer(
                 apiService = apiService,
                 databaseService = databaseService,
                 eventEmitter = eventEmitter,
                 userId = userId,
             )
+            eventEmitter.emitConversation(ConversationEvent.SyncProgress(60))
+            FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
+            FriendSync.syncBlackList(apiService, databaseService, userId)
+            GroupSync.syncJoinedGroups(apiService, databaseService, eventEmitter, userId)
+            eventEmitter.emitConversation(ConversationEvent.SyncProgress(80))
         } catch (e: Exception) {
             log.error(e) { "connected sync failed" }
             eventEmitter.emitConversation(ConversationEvent.SyncFailed(e.message ?: "sync failed"))
@@ -148,6 +156,27 @@ internal class MsgSyncer(
                     notificationDispatcher.dispatchTyping(message, conversationId)
                     return@forEach
                 }
+                if (isOnlineOnlyMessage(wsMsg, message)) {
+                    if (message.isNotification() && !bootstrapOnly) {
+                        notificationDispatcher.dispatch(message)
+                    }
+                    if (!bootstrapOnly) {
+                        val enriched = MessageDisplayEnricher.enrichMessages(
+                            apiService = apiService,
+                            databaseService = databaseService,
+                            messages = listOf(message),
+                        ).first()
+                        eventEmitter.emitMessage(MessageEvent.OnlineOnlyReceived(enriched))
+                        if (enriched.contentType == MessageType.CUSTOM ||
+                            enriched.contentType == MessageType.CUSTOM_MSG_ONLINE_ONLY
+                        ) {
+                            val senderId = enriched.sendID.orEmpty()
+                            val payload = enriched.content ?: enriched.customElem?.data.orEmpty()
+                            callManager?.handleSignalingMessage(senderId, payload)
+                        }
+                    }
+                    return@forEach
+                }
                 if (message.isNotification()) {
                     if (!bootstrapOnly) {
                         notificationDispatcher.dispatch(message)
@@ -193,6 +222,12 @@ internal class MsgSyncer(
     private fun Message.isNotification(): Boolean {
         val type = contentType?.value ?: return false
         return type >= MessageType.NOTIFICATION_BEGIN.value
+    }
+
+    private fun isOnlineOnlyMessage(wsMsg: WsMsgData, message: Message): Boolean {
+        if (message.contentType == MessageType.CUSTOM_MSG_ONLINE_ONLY) return true
+        val isHistory = wsMsg.options["history"] ?: true
+        return !isHistory
     }
 
     private fun WsMsgData.toMessage(conversationId: String): Message = Message(

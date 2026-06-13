@@ -348,3 +348,114 @@ DELETE FROM local_chat_logs;
 
 hideAllConversations:
 UPDATE local_conversations SET latestMsgSendTime = 0;
+
+-- Friends
+selectAllFriends:
+SELECT * FROM local_friends ORDER BY createTime DESC;
+
+selectFriendsPage:
+SELECT * FROM local_friends ORDER BY createTime DESC LIMIT ? OFFSET ?;
+
+selectFriendByUserID:
+SELECT * FROM local_friends WHERE friendUserID = ? LIMIT 1;
+
+insertOrReplaceFriend:
+INSERT OR REPLACE INTO local_friends VALUES ?;
+
+deleteFriend:
+DELETE FROM local_friends WHERE friendUserID = ?;
+
+deleteAllFriends:
+DELETE FROM local_friends;
+
+-- Blacks
+selectAllBlacks:
+SELECT * FROM local_blacks ORDER BY createTime DESC;
+
+selectBlackUserIDs:
+SELECT blockUserID FROM local_blacks;
+
+insertOrReplaceBlack:
+INSERT OR REPLACE INTO local_blacks VALUES ?;
+
+deleteBlack:
+DELETE FROM local_blacks WHERE blockUserID = ?;
+
+deleteAllBlacks:
+DELETE FROM local_blacks;
+
+-- Groups
+selectAllGroups:
+SELECT * FROM local_groups ORDER BY createTime DESC;
+
+insertOrReplaceGroup:
+INSERT OR REPLACE INTO local_groups VALUES ?;
+
+deleteGroup:
+DELETE FROM local_groups WHERE groupID = ?;
+
+-- Group members
+selectGroupMembersByGroupID:
+SELECT * FROM local_group_members WHERE groupID = ? ORDER BY joinTime ASC;
+
+selectGroupMembersPage:
+SELECT * FROM local_group_members WHERE groupID = ? ORDER BY joinTime ASC LIMIT ? OFFSET ?;
+
+insertOrReplaceGroupMember:
+INSERT OR REPLACE INTO local_group_members VALUES ?;
+
+deleteGroupMembersByGroupID:
+DELETE FROM local_group_members WHERE groupID = ?;
+
+-- Moments
+selectMomentsPage:
+SELECT * FROM local_moments ORDER BY createTime DESC LIMIT ? OFFSET ?;
+
+selectMomentsByUserIDPage:
+SELECT * FROM local_moments WHERE userID = ? ORDER BY createTime DESC LIMIT ? OFFSET ?;
+
+insertOrReplaceMoment:
+INSERT OR REPLACE INTO local_moments VALUES ?;
+
+deleteMomentByID:
+DELETE FROM local_moments WHERE momentID = ?;
+
+deleteAllMoments:
+DELETE FROM local_moments;
+
+-- Favorites
+selectFavoritesPage:
+SELECT * FROM local_favorites ORDER BY createTime DESC LIMIT ? OFFSET ?;
+
+insertOrReplaceFavorite:
+INSERT OR REPLACE INTO local_favorites VALUES ?;
+
+deleteFavoriteByID:
+DELETE FROM local_favorites WHERE favoriteID = ?;
+
+deleteFavoriteByTarget:
+DELETE FROM local_favorites WHERE targetType = ? AND targetID = ?;
+
+-- Sending messages
+insertOrReplaceSendingMessage:
+INSERT OR REPLACE INTO local_sending_messages VALUES ?;
+
+deleteSendingMessage:
+DELETE FROM local_sending_messages WHERE clientMsgID = ?;
+
+-- Uploads
+insertOrReplaceUpload:
+INSERT OR REPLACE INTO local_uploads VALUES ?;
+
+selectUploadByID:
+SELECT * FROM local_uploads WHERE uploadID = ? LIMIT 1;
+
+deleteUploadByID:
+DELETE FROM local_uploads WHERE uploadID = ?;
+
+-- Notification seqs
+selectNotificationSeq:
+SELECT seq FROM local_notification_seqs WHERE conversationID = ? LIMIT 1;
+
+insertOrReplaceNotificationSeq:
+INSERT OR REPLACE INTO local_notification_seqs VALUES ?;

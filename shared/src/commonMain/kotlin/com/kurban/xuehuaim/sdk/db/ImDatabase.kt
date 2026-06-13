@@ -1,7 +1,13 @@
 package com.kurban.xuehuaim.sdk.db
 
+import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
+import com.kurban.xuehuaim.sdk.model.FavoriteItem
+import com.kurban.xuehuaim.sdk.model.FriendInfo
+import com.kurban.xuehuaim.sdk.model.GroupInfo
+import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.DatabaseDriverFactory
 
@@ -40,6 +46,53 @@ internal interface ImDatabase {
     suspend fun selectSendingMessages(): List<SendingMessage>
     suspend fun deleteAllChatLogs()
     suspend fun hideAllConversations()
+
+    suspend fun getAllFriends(): List<FriendInfo>
+    suspend fun getFriendsPage(offset: Int, count: Int): List<FriendInfo>
+    suspend fun getFriendByUserId(userId: String): FriendInfo?
+    suspend fun insertOrReplaceFriend(friend: FriendInfo)
+    suspend fun batchUpsertFriends(friends: List<FriendInfo>)
+    suspend fun deleteFriend(userId: String)
+    suspend fun deleteAllFriends()
+
+    suspend fun getBlackList(): List<BlacklistInfo>
+    suspend fun getBlackUserIds(): Set<String>
+    suspend fun insertOrReplaceBlack(black: BlacklistInfo)
+    suspend fun deleteBlack(blockUserId: String)
+    suspend fun deleteAllBlacks()
+
+    suspend fun getAllGroups(): List<GroupInfo>
+    suspend fun insertOrReplaceGroup(group: GroupInfo)
+    suspend fun batchUpsertGroups(groups: List<GroupInfo>)
+    suspend fun deleteGroup(groupId: String)
+
+    suspend fun getGroupMembersPage(groupId: String, offset: Int, count: Int): List<GroupMemberInfo>
+    suspend fun insertOrReplaceGroupMember(member: GroupMemberInfo)
+    suspend fun batchUpsertGroupMembers(members: List<GroupMemberInfo>)
+    suspend fun deleteGroupMembers(groupId: String)
+
+    suspend fun getMomentsPage(offset: Int, count: Int): List<MomentInfo>
+    suspend fun getMomentsByUserIdPage(userId: String, offset: Int, count: Int): List<MomentInfo>
+    suspend fun insertOrReplaceMoment(moment: MomentInfo)
+    suspend fun batchUpsertMoments(moments: List<MomentInfo>)
+    suspend fun deleteMoment(momentId: String)
+    suspend fun deleteAllMoments()
+
+    suspend fun getFavoritesPage(offset: Int, count: Int): List<FavoriteItem>
+    suspend fun insertOrReplaceFavorite(item: FavoriteItem)
+    suspend fun batchUpsertFavorites(items: List<FavoriteItem>)
+    suspend fun deleteFavorite(favoriteId: String)
+    suspend fun deleteFavoriteByTarget(targetType: String, targetId: String)
+
+    suspend fun insertOrReplaceSendingMessage(record: SendingMessage)
+    suspend fun deleteSendingMessage(clientMsgId: String)
+
+    suspend fun insertOrReplaceUpload(record: UploadRecord)
+    suspend fun getUpload(uploadId: String): UploadRecord?
+    suspend fun deleteUpload(uploadId: String)
+
+    suspend fun getNotificationSeq(conversationId: String): Long
+    suspend fun setNotificationSeq(conversationId: String, seq: Long)
 }
 
 internal expect suspend fun createImDatabase(

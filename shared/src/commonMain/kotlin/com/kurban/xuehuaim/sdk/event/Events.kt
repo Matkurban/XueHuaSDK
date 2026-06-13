@@ -16,19 +16,20 @@ import com.kurban.xuehuaim.sdk.model.MomentComment
 import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.MomentLike
 import com.kurban.xuehuaim.sdk.model.RedPacketInfo
-import com.kurban.xuehuaim.sdk.model.UserInfo
 
 sealed interface ConnectionEvent {
     data class ConnectFailed(val code: Int, val error: String) : ConnectionEvent
+    data object Connecting : ConnectionEvent
+    data object ConnectSuccess : ConnectionEvent
     data class KickedOffline(val reason: String) : ConnectionEvent
-
     data object TokenExpired : ConnectionEvent
-
+    data object TokenInvalid : ConnectionEvent
     data object LogoutForced : ConnectionEvent
 }
 
 sealed interface MessageEvent {
     data class Received(val message: Message) : MessageEvent
+    data class OnlineOnlyReceived(val message: Message) : MessageEvent
     data class Revoked(val conversationId: String, val clientMsgId: String) : MessageEvent
     data class Deleted(val conversationId: String, val clientMsgId: String) : MessageEvent
     data class ReadReceipt(val conversationId: String, val msgIdList: List<String>) : MessageEvent
@@ -42,6 +43,7 @@ sealed interface ConversationEvent {
     data class Changed(val conversation: ConversationInfo) : ConversationEvent
     data class TotalUnreadChanged(val count: Int) : ConversationEvent
     data object SyncStarted : ConversationEvent
+    data class SyncProgress(val progress: Int) : ConversationEvent
     data class SyncFinished(val count: Int) : ConversationEvent
     data class SyncFailed(val error: String) : ConversationEvent
 }
@@ -72,7 +74,7 @@ sealed interface GroupEvent {
 }
 
 sealed interface UserEvent {
-    data class SelfInfoUpdated(val user: UserInfo) : UserEvent
+    data class SelfInfoUpdated(val user: com.kurban.xuehuaim.sdk.model.UserInfo) : UserEvent
     data class UserStatusChanged(val userId: String, val status: String) : UserEvent
     data class OnlineStatusChanged(val userId: String, val platformIds: List<Int>) : UserEvent
 }
@@ -90,6 +92,7 @@ sealed interface RedPacketEvent {
     data class Received(val packet: RedPacketInfo) : RedPacketEvent
     data class Grabbed(val packetId: String, val amount: Double) : RedPacketEvent
     data class Expired(val packetId: String) : RedPacketEvent
+    data class PointsBalanceChanged(val balance: Double) : RedPacketEvent
 }
 
 sealed interface MomentsEvent {
@@ -99,11 +102,13 @@ sealed interface MomentsEvent {
     data class Unliked(val momentId: String, val userId: String) : MomentsEvent
     data class Commented(val momentId: String, val comment: MomentComment) : MomentsEvent
     data class CommentDeleted(val momentId: String, val commentId: String) : MomentsEvent
+    data class ListUpdated(val moments: List<MomentInfo>) : MomentsEvent
 }
 
 sealed interface FavoriteEvent {
     data class Added(val item: FavoriteItem) : FavoriteEvent
     data class Deleted(val favoriteId: String) : FavoriteEvent
+    data class Updated(val item: FavoriteItem) : FavoriteEvent
 }
 
 data class UploadProgressEvent(

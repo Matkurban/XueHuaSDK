@@ -49,6 +49,7 @@ internal data class WsMsgData(
     @SerialName("sessionType") val sessionType: Int? = null,
     @SerialName("senderNickname") val senderNickname: String? = null,
     @SerialName("senderFaceURL") val senderFaceURL: String? = null,
+    @SerialName("options") val options: Map<String, Boolean> = emptyMap(),
 )
 
 @OptIn(ExperimentalEncodingApi::class)

@@ -1,6 +1,8 @@
 package com.kurban.xuehuaim.sdk.platform
 
 import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.driver.worker.createDefaultWebWorkerDriver
+import com.kurban.xuehuaim.sdk.db.OpenIMDatabase
 import com.kurban.xuehuaim.sdk.enum.IMPlatform
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -35,10 +37,11 @@ actual class FileSystem {
 }
 
 actual class DatabaseDriverFactory {
-    actual fun createDriver(dbPath: String): SqlDriver =
-        error("Wasm uses InMemoryImDatabase")
+    actual fun createDriver(dbPath: String): SqlDriver = createDefaultWebWorkerDriver()
 
-    actual suspend fun initializeSchema(driver: SqlDriver) = Unit
+    actual suspend fun initializeSchema(driver: SqlDriver) {
+        OpenIMDatabase.Schema.create(driver)
+    }
 }
 
 actual fun createGzipCodec(): GzipCodec = GzipCodec()

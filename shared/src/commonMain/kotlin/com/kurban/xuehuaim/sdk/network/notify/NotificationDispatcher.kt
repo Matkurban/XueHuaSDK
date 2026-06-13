@@ -29,8 +29,11 @@ import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.MomentLike
 import com.kurban.xuehuaim.sdk.model.RedPacketInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.ConversationDisplayEnricher
+import com.kurban.xuehuaim.sdk.sync.FriendSync
+import com.kurban.xuehuaim.sdk.sync.GroupSync
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -39,6 +42,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 internal class NotificationDispatcher(
     private val databaseService: DatabaseService,
+    private val apiService: ImApiService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: () -> String? = { null },
 ) {
@@ -221,21 +225,25 @@ internal class NotificationDispatcher(
     private suspend fun handleFriendApplication(message: Message) {
         val detail = parseContent<FriendApplicationInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendApplicationAdded(detail))
+        syncFriendsIfLoggedIn()
     }
 
     private suspend fun handleFriendApplicationAccepted(message: Message) {
         val detail = parseContent<FriendApplicationInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendApplicationAccepted(detail))
+        syncFriendsIfLoggedIn()
     }
 
     private suspend fun handleFriendApplicationRejected(message: Message) {
         val detail = parseContent<FriendApplicationInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendApplicationRejected(detail))
+        syncFriendsIfLoggedIn()
     }
 
     private suspend fun handleFriendAdded(message: Message) {
         val detail = parseContent<FriendInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendAdded(detail))
+        syncFriendsIfLoggedIn()
         loginUserId()?.let { selfId ->
             ConversationDisplayEnricher.updateSingleChatDisplay(
                 databaseService = databaseService,
@@ -249,6 +257,7 @@ internal class NotificationDispatcher(
     private suspend fun handleFriendInfoUpdated(message: Message) {
         val detail = parseContent<FriendInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendInfoChanged(detail))
+        syncFriendsIfLoggedIn()
         loginUserId()?.let { selfId ->
             ConversationDisplayEnricher.updateSingleChatDisplay(
                 databaseService = databaseService,
@@ -262,16 +271,23 @@ internal class NotificationDispatcher(
     private suspend fun handleFriendDeleted(message: Message) {
         val userId = parseContent<Map<String, String>>(message.content)?.get("userID") ?: return
         eventEmitter.emitFriendship(FriendshipEvent.FriendDeleted(userId))
+        syncFriendsIfLoggedIn()
     }
 
     private suspend fun handleBlackAdded(message: Message) {
         val detail = parseContent<BlacklistInfo>(message.content) ?: return
         eventEmitter.emitFriendship(FriendshipEvent.BlackAdded(detail))
+        loginUserId()?.let { userId ->
+            FriendSync.syncBlackList(apiService, databaseService, userId)
+        }
     }
 
     private suspend fun handleBlackDeleted(message: Message) {
         val userId = parseContent<Map<String, String>>(message.content)?.get("userID") ?: return
         eventEmitter.emitFriendship(FriendshipEvent.BlackDeleted(userId))
+        loginUserId()?.let { id ->
+            FriendSync.syncBlackList(apiService, databaseService, id)
+        }
     }
 
     private suspend fun handleConversationChange(message: Message) {
@@ -292,11 +308,13 @@ internal class NotificationDispatcher(
             eventEmitter = eventEmitter,
             group = detail,
         )
+        syncGroupIfLoggedIn(detail.groupID)
     }
 
     private suspend fun handleGroupDismissed(message: Message) {
         val groupId = parseContent<Map<String, String>>(message.content)?.get("groupID") ?: return
         eventEmitter.emitGroup(GroupEvent.GroupDismissed(groupId))
+        syncGroupIfLoggedIn(groupId)
     }
 
     private suspend fun handleMemberAdded(message: Message) {
@@ -307,6 +325,7 @@ internal class NotificationDispatcher(
             }
             ?: return
         eventEmitter.emitGroup(GroupEvent.MemberAdded(detail))
+        syncGroupIfLoggedIn(detail.groupID)
     }
 
     private suspend fun handleMemberDeleted(message: Message) {
@@ -314,6 +333,7 @@ internal class NotificationDispatcher(
         val groupId = map["groupID"] ?: return
         val userId = map["userID"] ?: return
         eventEmitter.emitGroup(GroupEvent.MemberDeleted(groupId, userId))
+        syncGroupIfLoggedIn(groupId)
     }
 
     private suspend fun handleMemberInfoChanged(message: Message) {
@@ -324,6 +344,7 @@ internal class NotificationDispatcher(
             }
             ?: return
         eventEmitter.emitGroup(GroupEvent.MemberInfoChanged(detail))
+        syncGroupIfLoggedIn(detail.groupID)
     }
 
     private suspend fun handleJoinGroupApplication(message: Message) {
@@ -388,6 +409,19 @@ internal class NotificationDispatcher(
         val packetId = map["packetID"] ?: return
         val amount = map["amount"]?.toDoubleOrNull() ?: 0.0
         eventEmitter.emitRedPacket(RedPacketEvent.Grabbed(packetId, amount))
+        map["balance"]?.toDoubleOrNull()?.let { balance ->
+            eventEmitter.emitRedPacket(RedPacketEvent.PointsBalanceChanged(balance))
+        }
+    }
+
+    private suspend fun syncFriendsIfLoggedIn() {
+        val userId = loginUserId() ?: return
+        FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
+    }
+
+    private suspend fun syncGroupIfLoggedIn(groupId: String) {
+        if (groupId.isBlank()) return
+        GroupSync.syncGroupInfoAndMembers(apiService, databaseService, groupId)
     }
 
     private fun parseJsonMap(content: String): JsonObject? =

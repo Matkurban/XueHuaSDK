@@ -101,7 +101,7 @@ class IMManager internal constructor(
 
     val conversationManager =
         ConversationManager(apiService, databaseService, webSocketService, eventEmitter, loginUserId)
-    val friendshipManager = FriendshipManager(apiService, eventEmitter, loginUserId)
+    val friendshipManager = FriendshipManager(apiService, databaseService, eventEmitter, loginUserId)
     val messageManager = MessageManager(
         apiService,
         databaseService,
@@ -113,10 +113,10 @@ class IMManager internal constructor(
         fileUploadService,
         fileSystem,
     ).also { it.bindConversationManager(conversationManager) }
-    val groupManager = GroupManager(apiService, eventEmitter, loginUserId)
+    val groupManager = GroupManager(apiService, databaseService, eventEmitter, loginUserId)
     val userManager = UserManager(apiService, databaseService, eventEmitter, loginUserId)
-    val momentsManager = MomentsManager(apiService, eventEmitter, loginUserId)
-    val favoriteManager = FavoriteManager(apiService, eventEmitter)
+    val momentsManager = MomentsManager(apiService, databaseService, eventEmitter, loginUserId)
+    val favoriteManager = FavoriteManager(apiService, databaseService, eventEmitter)
     val callManager = CallManager(apiService, messageManager, eventEmitter)
 
     val redPacketManager = RedPacketManager(apiService, databaseService, eventEmitter)
@@ -448,6 +448,7 @@ class IMManager internal constructor(
             val loginUserIdHolder = LoginUserIdHolder()
             val notificationDispatcher = NotificationDispatcher(
                 databaseService = databaseService,
+                apiService = apiService,
                 eventEmitter = eventEmitter,
                 loginUserId = { loginUserIdHolder.userId },
             )
