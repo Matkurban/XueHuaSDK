@@ -1,7 +1,6 @@
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -11,8 +10,12 @@ plugins {
     alias(libs.plugins.mavenPublish)
 }
 
-val protoGeneratedDir =
-    project(":proto").layout.buildDirectory.dir("generated/source/wire")
+val syncWireSources = tasks.register<Sync>("syncWireSources") {
+    description = "syncWireSources"
+    dependsOn(":proto:generateMainProtos")
+    from(project(":proto").layout.buildDirectory.dir("generated/source/wire"))
+    into(layout.buildDirectory.dir("generated/wire"))
+}
 
 kotlin {
     compilerOptions {
@@ -64,7 +67,7 @@ kotlin {
         }
 
         commonMain {
-            kotlin.srcDir(protoGeneratedDir)
+            kotlin.srcDir(syncWireSources.map { it.destinationDir })
             dependencies {
                 implementation(libs.kotlin.logging)
                 implementation(libs.koin.core)
@@ -117,10 +120,6 @@ kotlin {
             implementation(libs.ktor.client.core)
         }
     }
-}
-
-tasks.withType<KotlinCompilationTask<*>>().configureEach {
-    dependsOn(":proto:generateProtos")
 }
 
 sqldelight {
