@@ -3,7 +3,6 @@ package com.kurban.xuehuaim.sdk.sync
 import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.event.GroupEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
-import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 

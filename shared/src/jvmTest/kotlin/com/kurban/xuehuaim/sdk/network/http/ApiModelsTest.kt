@@ -1,7 +1,6 @@
 package com.kurban.xuehuaim.sdk.network.http
 
 import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals

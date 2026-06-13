@@ -26,9 +26,6 @@ import com.kurban.xuehuaim.sdk.model.AuthCacheData
 import com.kurban.xuehuaim.sdk.model.SpaceInfo
 import com.kurban.xuehuaim.sdk.model.UploadFileResult
 import com.kurban.xuehuaim.sdk.model.UserInfo
-import com.kurban.xuehuaim.sdk.util.CacheKey
-import com.kurban.xuehuaim.sdk.util.OpenImUtils
-import kotlinx.serialization.json.Json
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginReq
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdHolder
@@ -43,12 +40,15 @@ import com.kurban.xuehuaim.sdk.platform.GzipCodec
 import com.kurban.xuehuaim.sdk.platform.currentPlatform
 import com.kurban.xuehuaim.sdk.platform.defaultDbPath
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
+import com.kurban.xuehuaim.sdk.util.CacheKey
+import com.kurban.xuehuaim.sdk.util.OpenImUtils
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import com.kurban.xuehuaim.sdk.util.configureSdkLogging
 import com.kurban.xuehuaim.sdk.util.md5Hex
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 class IMManager internal constructor(
     private val eventEmitter: SdkEventEmitter,
@@ -99,8 +99,15 @@ class IMManager internal constructor(
     private val loginUserId: () -> String? = { authData?.userID }
 
     val conversationManager =
-        ConversationManager(apiService, databaseService, webSocketService, eventEmitter, loginUserId)
-    val friendshipManager = FriendshipManager(apiService, databaseService, eventEmitter, loginUserId)
+        ConversationManager(
+            apiService,
+            databaseService,
+            webSocketService,
+            eventEmitter,
+            loginUserId
+        )
+    val friendshipManager =
+        FriendshipManager(apiService, databaseService, eventEmitter, loginUserId)
     val messageManager = MessageManager(
         apiService,
         databaseService,
@@ -327,6 +334,7 @@ class IMManager internal constructor(
                     loginWithCachedAuth(data)
                     LoginStatus.LOGGED
                 }
+
                 else -> {
                     eventEmitter.setLoginStatus(LoginStatus.LOGOUT)
                     LoginStatus.LOGOUT

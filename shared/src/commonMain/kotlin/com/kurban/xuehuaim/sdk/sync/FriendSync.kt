@@ -4,7 +4,6 @@ import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.event.FriendshipEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
-import com.kurban.xuehuaim.sdk.sync.ConversationDisplayEnricher
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 
 internal object FriendSync {

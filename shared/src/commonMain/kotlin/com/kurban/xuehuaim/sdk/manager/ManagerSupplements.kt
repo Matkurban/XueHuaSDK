@@ -4,7 +4,6 @@ import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.event.ConversationEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
-import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.util.withParsedContent
 

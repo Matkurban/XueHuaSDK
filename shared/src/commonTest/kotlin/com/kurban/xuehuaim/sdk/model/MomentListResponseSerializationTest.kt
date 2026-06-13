@@ -1,9 +1,8 @@
 package com.kurban.xuehuaim.sdk.model
 
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 class MomentListResponseSerializationTest {
     private val json = Json { ignoreUnknownKeys = true }

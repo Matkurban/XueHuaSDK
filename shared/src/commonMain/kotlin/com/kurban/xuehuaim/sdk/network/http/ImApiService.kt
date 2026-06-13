@@ -3,20 +3,17 @@ package com.kurban.xuehuaim.sdk.network.http
 import com.kurban.xuehuaim.sdk.enum.IMPlatform
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.model.ApiResponse
-import com.kurban.xuehuaim.sdk.model.AppealInfo
 import com.kurban.xuehuaim.sdk.model.AppealCaptcha
+import com.kurban.xuehuaim.sdk.model.AppealInfo
 import com.kurban.xuehuaim.sdk.model.AppealUploadResult
-import com.kurban.xuehuaim.sdk.model.CreateReportResult
-import com.kurban.xuehuaim.sdk.model.FavoriteListResponse
-import com.kurban.xuehuaim.sdk.model.MomentComment
-import com.kurban.xuehuaim.sdk.model.MomentLike
-import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.model.ApplicationVersionInfo
 import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.ConversationReq
 import com.kurban.xuehuaim.sdk.model.CreateMeetingResult
+import com.kurban.xuehuaim.sdk.model.CreateReportResult
 import com.kurban.xuehuaim.sdk.model.FavoriteItem
+import com.kurban.xuehuaim.sdk.model.FavoriteListResponse
 import com.kurban.xuehuaim.sdk.model.FriendApplicationInfo
 import com.kurban.xuehuaim.sdk.model.FriendInfo
 import com.kurban.xuehuaim.sdk.model.GroupApplicationInfo
@@ -24,7 +21,9 @@ import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.JoinMeetingResult
 import com.kurban.xuehuaim.sdk.model.Message
+import com.kurban.xuehuaim.sdk.model.MomentComment
 import com.kurban.xuehuaim.sdk.model.MomentInfo
+import com.kurban.xuehuaim.sdk.model.MomentLike
 import com.kurban.xuehuaim.sdk.model.MomentListResponse
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
 import com.kurban.xuehuaim.sdk.model.RedPacketDetail
@@ -32,6 +31,7 @@ import com.kurban.xuehuaim.sdk.model.ReportInfo
 import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgBySeqsReq
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgResp
 import com.kurban.xuehuaim.sdk.network.sync.SeqRange
@@ -1514,7 +1514,8 @@ internal class ImApiService(
     }
 
     suspend fun sendRedPacket(req: SendRedPacketRequest): String {
-        val resp: SendRedPacketResp = httpClient.chatPostEnvelope(ChatApiRoutes.RED_PACKET_SEND, req)
+        val resp: SendRedPacketResp =
+            httpClient.chatPostEnvelope(ChatApiRoutes.RED_PACKET_SEND, req)
         return resp.packetID
     }
 
@@ -1574,7 +1575,10 @@ internal class ImApiService(
         )
     }
 
-    suspend fun getDesignatedFriends(ownerUserID: String, friendUserIDs: List<String>): List<FriendInfo> {
+    suspend fun getDesignatedFriends(
+        ownerUserID: String,
+        friendUserIDs: List<String>
+    ): List<FriendInfo> {
         if (friendUserIDs.isEmpty()) return emptyList()
         val resp: GetFriendListResp = httpClient.imPostEnvelope(
             ImApiRoutes.GET_DESIGNATED_FRIENDS,
@@ -1615,7 +1619,11 @@ internal class ImApiService(
         return resp.count
     }
 
-    suspend fun updateFriends(ownerUserID: String, friendUserIDs: List<String>, remark: String? = null) {
+    suspend fun updateFriends(
+        ownerUserID: String,
+        friendUserIDs: List<String>,
+        remark: String? = null
+    ) {
         val body = buildMap {
             put("ownerUserID", ownerUserID)
             put("friendUserIDs", friendUserIDs)
@@ -1640,7 +1648,11 @@ internal class ImApiService(
         return resp.users
     }
 
-    suspend fun subscribeUsersStatus(userID: String, userIDs: List<String>, genre: Int = 1): List<UserStatusInfo> {
+    suspend fun subscribeUsersStatus(
+        userID: String,
+        userIDs: List<String>,
+        genre: Int = 1
+    ): List<UserStatusInfo> {
         val resp: UserStatusListResp = httpClient.imPostEnvelope(
             ImApiRoutes.SUBSCRIBE_USERS_STATUS,
             mapOf("userID" to userID, "userIDs" to userIDs, "genre" to genre),
@@ -1681,14 +1693,22 @@ internal class ImApiService(
         return resp.members
     }
 
-    suspend fun setGroupMemberInfo(groupID: String, userID: String, nickname: String? = null, faceURL: String? = null) {
+    suspend fun setGroupMemberInfo(
+        groupID: String,
+        userID: String,
+        nickname: String? = null,
+        faceURL: String? = null
+    ) {
         val memberInfo = buildMap {
             put("groupID", groupID)
             put("userID", userID)
             nickname?.let { put("nickname", it) }
             faceURL?.let { put("faceURL", it) }
         }
-        httpClient.imPostVoid(ImApiRoutes.SET_GROUP_MEMBER_INFO, mapOf("members" to listOf(memberInfo)))
+        httpClient.imPostVoid(
+            ImApiRoutes.SET_GROUP_MEMBER_INFO,
+            mapOf("members" to listOf(memberInfo))
+        )
     }
 
     suspend fun transferGroup(groupID: String, newOwnerUserID: String) {
@@ -1720,7 +1740,10 @@ internal class ImApiService(
         httpClient.imPostVoid(ImApiRoutes.CANCEL_MUTE_GROUP, mapOf("groupID" to groupID))
     }
 
-    suspend fun fetchFavoriteListFromServer(pageNumber: Int = 1, showNumber: Int = 20): FavoriteListResponse {
+    suspend fun fetchFavoriteListFromServer(
+        pageNumber: Int = 1,
+        showNumber: Int = 20
+    ): FavoriteListResponse {
         val resp: FavoriteListResp = httpClient.chatPostEnvelope(
             ChatApiRoutes.FAVORITE_LIST,
             FavoriteListReq(pageNumber = pageNumber, showNumber = showNumber),
@@ -1770,7 +1793,10 @@ internal class ImApiService(
         ),
     )
 
-    suspend fun getLatestApplicationVersion(platform: String, currentVersion: String? = null): ApplicationVersionInfo? {
+    suspend fun getLatestApplicationVersion(
+        platform: String,
+        currentVersion: String? = null
+    ): ApplicationVersionInfo? {
         val resp: LatestAppVersionResp = httpClient.chatPostEnvelope(
             ChatApiRoutes.LATEST_APPLICATION_VERSION,
             mapOf("platform" to platform, "version" to currentVersion),

@@ -101,7 +101,10 @@ class DatabaseService(
         db().insertOrReplaceGrabbedRedPacket(packetId, grabTime)
 
     suspend fun markRedPacketGrabbed(packetId: String) =
-        insertOrReplaceGrabbedRedPacket(packetId, com.kurban.xuehuaim.sdk.util.System.currentTimeMillis())
+        insertOrReplaceGrabbedRedPacket(
+            packetId,
+            com.kurban.xuehuaim.sdk.util.System.currentTimeMillis()
+        )
 
     suspend fun selectGrabbedRedPacket(packetId: String): Long? =
         db().selectGrabbedRedPacket(packetId)
@@ -223,9 +226,10 @@ class DatabaseService(
             selectAllMessages()
         }
         return source.filter { msg ->
-            val matchesKeyword = keyword.isNullOrBlank() || msg.content?.contains(keyword, true) == true
+            val matchesKeyword =
+                keyword.isNullOrBlank() || msg.content?.contains(keyword, true) == true
             val matchesType = messageTypes.isNullOrEmpty() ||
-                messageTypes.contains(msg.contentType?.value)
+                    messageTypes.contains(msg.contentType?.value)
             val time = msg.sendTime ?: msg.createTime ?: 0L
             val matchesStart = startTime == null || time >= startTime
             val matchesEnd = endTime == null || time <= endTime
@@ -235,7 +239,11 @@ class DatabaseService(
 
     suspend fun getAllFriends(): List<FriendInfo> = db().getAllFriends()
 
-    suspend fun getFriendsPage(offset: Int, count: Int, filterBlack: Boolean = false): List<FriendInfo> {
+    suspend fun getFriendsPage(
+        offset: Int,
+        count: Int,
+        filterBlack: Boolean = false
+    ): List<FriendInfo> {
         val page = db().getFriendsPage(offset, count)
         if (!filterBlack) return page
         val blackIds = db().getBlackUserIds()

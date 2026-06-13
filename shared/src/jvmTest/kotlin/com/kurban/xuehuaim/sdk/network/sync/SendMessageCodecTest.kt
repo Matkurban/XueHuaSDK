@@ -1,6 +1,5 @@
 package com.kurban.xuehuaim.sdk.network.sync
 
-import okio.ByteString.Companion.toByteString
 import openim.sdkws.MsgData
 import openim.sdkws.UserSendMsgResp
 import kotlin.test.Test

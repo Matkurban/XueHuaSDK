@@ -70,13 +70,23 @@ internal suspend fun UserManager.getUserClientConfig(
     apiService.getUserClientConfig(loginUserId.requireUserId())
 }
 
-internal suspend fun UserManager.searchFriendInfo(apiService: ImApiService, keyword: String): List<FriendInfo> =
+internal suspend fun UserManager.searchFriendInfo(
+    apiService: ImApiService,
+    keyword: String
+): List<FriendInfo> =
     withContext(ioDispatcher) { apiService.searchFriendInfo(keyword) }
 
-internal suspend fun UserManager.searchUserFullInfo(apiService: ImApiService, keyword: String): List<UserFullInfo> =
+internal suspend fun UserManager.searchUserFullInfo(
+    apiService: ImApiService,
+    keyword: String
+): List<UserFullInfo> =
     withContext(ioDispatcher) { apiService.searchUserFullInfo(keyword) }
 
-internal suspend fun UserManager.getRtcToken(apiService: ImApiService, roomId: String, userId: String) =
+internal suspend fun UserManager.getRtcToken(
+    apiService: ImApiService,
+    roomId: String,
+    userId: String
+) =
     withContext(ioDispatcher) { apiService.getRtcToken(roomId, userId) }
 
 internal suspend fun UserManager.resetPaymentPassword(

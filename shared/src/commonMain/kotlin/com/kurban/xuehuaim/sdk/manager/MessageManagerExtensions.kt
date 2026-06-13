@@ -2,43 +2,21 @@ package com.kurban.xuehuaim.sdk.manager
 
 import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.enum.ConversationType
-import com.kurban.xuehuaim.sdk.enum.FavoriteType
-import com.kurban.xuehuaim.sdk.enum.GroupRoleLevel
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
-import com.kurban.xuehuaim.sdk.event.FavoriteEvent
-import com.kurban.xuehuaim.sdk.event.MomentsEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
 import com.kurban.xuehuaim.sdk.model.AdvancedTextElem
-import com.kurban.xuehuaim.sdk.model.AppealCaptcha
-import com.kurban.xuehuaim.sdk.model.AppealUploadResult
-import com.kurban.xuehuaim.sdk.model.ApplicationVersionInfo
 import com.kurban.xuehuaim.sdk.model.CallSignalElem
-import com.kurban.xuehuaim.sdk.model.CreateReportResult
-import com.kurban.xuehuaim.sdk.model.FavoriteItem
-import com.kurban.xuehuaim.sdk.model.FavoriteListResponse
 import com.kurban.xuehuaim.sdk.model.FileElem
-import com.kurban.xuehuaim.sdk.model.FriendInfo
-import com.kurban.xuehuaim.sdk.model.GroupInfo
-import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.model.MessageEntity
-import com.kurban.xuehuaim.sdk.model.MomentComment
-import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
-import com.kurban.xuehuaim.sdk.model.MomentInfo
-import com.kurban.xuehuaim.sdk.model.MomentLike
 import com.kurban.xuehuaim.sdk.model.PictureElem
 import com.kurban.xuehuaim.sdk.model.PictureInfo
 import com.kurban.xuehuaim.sdk.model.QuoteElem
 import com.kurban.xuehuaim.sdk.model.RedPacketElem
 import com.kurban.xuehuaim.sdk.model.SoundElem
-import com.kurban.xuehuaim.sdk.model.UserFullInfo
-import com.kurban.xuehuaim.sdk.model.UserInfo
-import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.model.VideoElem
-import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdProvider
-import com.kurban.xuehuaim.sdk.network.http.applicationPlatformName
 import com.kurban.xuehuaim.sdk.platform.FileSystem
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.util.ClientMsgIdGenerator
@@ -246,15 +224,19 @@ internal suspend fun MessageManager.handleMediaUploadIfNeeded(
         MessageType.PICTURE -> handlePictureUpload(
             fileUploadService, fileSystem, message, clientMsgId, pendingBytes,
         )
+
         MessageType.VOICE -> handleSoundUpload(
             fileUploadService, fileSystem, message, clientMsgId, pendingBytes,
         )
+
         MessageType.VIDEO -> handleVideoUpload(
             fileUploadService, fileSystem, message, clientMsgId, pendingBytes, pendingSnapshot,
         )
+
         MessageType.FILE -> handleFileUpload(
             fileUploadService, fileSystem, message, clientMsgId, pendingBytes,
         )
+
         else -> message
     }
 }
@@ -274,10 +256,12 @@ private suspend fun handlePictureUpload(
         pendingBytes != null -> fileUploadService.uploadFileBytes(
             pendingBytes, name, clientMsgId = clientMsgId, cause = "msg-picture",
         )
+
         !elem.sourcePath.isNullOrBlank() && fileSystem.exists(elem.sourcePath) ->
             fileUploadService.uploadFile(
                 elem.sourcePath, name, clientMsgId = clientMsgId, cause = "msg-picture",
             )
+
         else -> return message
     }
     val fileSize = pendingBytes?.size?.toLong() ?: fileSystem.fileSize(elem.sourcePath.orEmpty())
@@ -311,9 +295,19 @@ private suspend fun handleSoundUpload(
     val ext = filepathExt(elem.uuid, soundPath)
     val name = uploadFileName("voice", clientMsgId) + ext
     val result = if (pendingBytes != null) {
-        fileUploadService.uploadFileBytes(pendingBytes, name, clientMsgId = clientMsgId, cause = "msg-voice")
+        fileUploadService.uploadFileBytes(
+            pendingBytes,
+            name,
+            clientMsgId = clientMsgId,
+            cause = "msg-voice"
+        )
     } else if (fileSystem.exists(soundPath)) {
-        fileUploadService.uploadFile(soundPath, name, clientMsgId = clientMsgId, cause = "msg-voice")
+        fileUploadService.uploadFile(
+            soundPath,
+            name,
+            clientMsgId = clientMsgId,
+            cause = "msg-voice"
+        )
     } else {
         return message
     }
@@ -348,8 +342,9 @@ private suspend fun handleVideoUpload(
                         clientMsgId = "${clientMsgId}_snapshot",
                         cause = "msg-video-snapshot",
                     )
+
                     !updatedElem.snapshotPath.isNullOrBlank() &&
-                        fileSystem.exists(updatedElem.snapshotPath!!) -> {
+                            fileSystem.exists(updatedElem.snapshotPath!!) -> {
                         val snapshotPath = updatedElem.snapshotPath!!
                         fileUploadService.uploadFile(
                             snapshotPath,
@@ -358,6 +353,7 @@ private suspend fun handleVideoUpload(
                             cause = "msg-video-snapshot",
                         )
                     }
+
                     else -> return@runCatching updatedElem
                 }
                 val snapSize = pendingSnapshot?.size?.toLong()
@@ -382,6 +378,7 @@ private suspend fun handleVideoUpload(
                 clientMsgId = clientMsgId,
                 cause = "msg-video",
             )
+
             !updatedElem.videoPath.isNullOrBlank() && fileSystem.exists(updatedElem.videoPath) ->
                 fileUploadService.uploadFile(
                     updatedElem.videoPath,
@@ -389,6 +386,7 @@ private suspend fun handleVideoUpload(
                     clientMsgId = clientMsgId,
                     cause = "msg-video",
                 )
+
             else -> return@coroutineScope message
         }
         val videoSize = pendingBytes?.size?.toLong()
@@ -417,14 +415,22 @@ private suspend fun handleFileUpload(
 ): Message {
     val elem = message.fileElem ?: return message
     if (!elem.sourceUrl.isNullOrBlank()) return message
-    val baseName = elem.fileName ?: elem.filePath?.substringAfterLast('/').orEmpty().ifBlank { "file" }
+    val baseName =
+        elem.fileName ?: elem.filePath?.substringAfterLast('/').orEmpty().ifBlank { "file" }
     val name = "${uploadFileName("file", clientMsgId)}/$baseName"
     val result = when {
         pendingBytes != null -> fileUploadService.uploadFileBytes(
             pendingBytes, name, clientMsgId = clientMsgId, cause = "msg-file",
         )
+
         !elem.filePath.isNullOrBlank() && fileSystem.exists(elem.filePath) ->
-            fileUploadService.uploadFile(elem.filePath, name, clientMsgId = clientMsgId, cause = "msg-file")
+            fileUploadService.uploadFile(
+                elem.filePath,
+                name,
+                clientMsgId = clientMsgId,
+                cause = "msg-file"
+            )
+
         else -> return message
     }
     val fileSize = pendingBytes?.size?.toLong() ?: fileSystem.fileSize(elem.filePath.orEmpty())

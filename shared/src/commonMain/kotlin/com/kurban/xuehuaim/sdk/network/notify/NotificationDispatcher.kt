@@ -115,7 +115,8 @@ internal class NotificationDispatcher(
         val contentMap = parseContent<Map<String, String>>(message.content)
         val msgTips = contentMap?.get("msgTips").orEmpty()
         val platformId = message.platformID ?: 0
-        val platformIds = if (msgTips == "yes" && platformId > 0) listOf(platformId) else emptyList()
+        val platformIds =
+            if (msgTips == "yes" && platformId > 0) listOf(platformId) else emptyList()
         eventEmitter.emitMessage(
             MessageEvent.TypingStatusChanged(
                 InputStatusChangedData(
@@ -136,6 +137,7 @@ internal class NotificationDispatcher(
             key.startsWith("favorite_") -> handleFavoriteNotification(key, dataStr)
             key.startsWith("red_packet_") || key.startsWith("points_") ->
                 handleRedPacketBusinessNotification(key, dataStr)
+
             else -> eventEmitter.emitCustomBusiness(CustomBusinessEvent.Received(key, dataStr))
         }
     }
@@ -146,10 +148,12 @@ internal class NotificationDispatcher(
             "moment_created" -> parseContent<MomentInfo>(dataStr)?.let {
                 eventEmitter.emitMoments(MomentsEvent.NewMoment(it))
             }
+
             "moment_deleted" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 eventEmitter.emitMoments(MomentsEvent.MomentDeleted(momentId))
             }
+
             "moment_liked" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val like = MomentLike(
@@ -159,11 +163,13 @@ internal class NotificationDispatcher(
                 )
                 eventEmitter.emitMoments(MomentsEvent.Liked(momentId, like))
             }
+
             "moment_unliked" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val userId = data["userID"]?.jsonPrimitive?.content.orEmpty()
                 eventEmitter.emitMoments(MomentsEvent.Unliked(momentId, userId))
             }
+
             "moment_commented" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val comment = MomentComment(
@@ -174,11 +180,13 @@ internal class NotificationDispatcher(
                 )
                 eventEmitter.emitMoments(MomentsEvent.Commented(momentId, comment))
             }
+
             "moment_comment_deleted" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val commentId = data["commentID"]?.jsonPrimitive?.content ?: return
                 eventEmitter.emitMoments(MomentsEvent.CommentDeleted(momentId, commentId))
             }
+
             else -> eventEmitter.emitCustomBusiness(CustomBusinessEvent.Received(key, dataStr))
         }
     }
@@ -188,11 +196,13 @@ internal class NotificationDispatcher(
             "favorite_added" -> parseContent<FavoriteItem>(dataStr)?.let {
                 eventEmitter.emitFavorite(FavoriteEvent.Added(it))
             }
+
             "favorite_removed" -> {
                 val data = parseJsonMap(dataStr) ?: return
                 val favoriteId = data["favoriteID"]?.jsonPrimitive?.content ?: return
                 eventEmitter.emitFavorite(FavoriteEvent.Deleted(favoriteId))
             }
+
             else -> eventEmitter.emitCustomBusiness(CustomBusinessEvent.Received(key, dataStr))
         }
     }
@@ -205,6 +215,7 @@ internal class NotificationDispatcher(
                 }.getOrNull() ?: dataStr.trim('"')
                 eventEmitter.emitRedPacket(RedPacketEvent.Expired(packetId))
             }
+
             else -> eventEmitter.emitCustomBusiness(CustomBusinessEvent.Received(key, dataStr))
         }
     }

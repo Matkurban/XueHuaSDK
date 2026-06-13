@@ -244,6 +244,7 @@ internal class FileUploadService(
                 val end = (start + length).coerceAtMost(source.data.size)
                 source.data.copyOfRange(start, end)
             }
+
             is UploadSource.Path -> fileSystem.readBytes(source.path, offset, length)
         }
 
@@ -255,10 +256,20 @@ internal class FileUploadService(
         current: Long,
     ) {
         eventEmitter.emitUploadProgress(
-            UploadProgressEvent(uploadId = uploadId, progress = progress, total = total, current = current),
+            UploadProgressEvent(
+                uploadId = uploadId,
+                progress = progress,
+                total = total,
+                current = current
+            ),
         )
         clientMsgId?.let {
-            eventEmitter.emitMessage(MessageEvent.SendProgress(clientMsgId = it, progress = progress))
+            eventEmitter.emitMessage(
+                MessageEvent.SendProgress(
+                    clientMsgId = it,
+                    progress = progress
+                )
+            )
         }
     }
 

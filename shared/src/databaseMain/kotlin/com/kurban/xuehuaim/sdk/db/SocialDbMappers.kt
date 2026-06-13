@@ -1,17 +1,15 @@
 package com.kurban.xuehuaim.sdk.db
 
 import com.kurban.xuehuaim.sdk.enum.GroupRoleLevel
+import com.kurban.xuehuaim.sdk.enum.GroupType
 import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.FavoriteItem
 import com.kurban.xuehuaim.sdk.model.FriendInfo
 import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
-import com.kurban.xuehuaim.sdk.enum.GroupType
 import com.kurban.xuehuaim.sdk.model.MomentComment
 import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.MomentLike
-import com.kurban.xuehuaim.sdk.model.MomentMedia
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 internal object SocialDbMappers {
@@ -108,7 +106,8 @@ internal object SocialDbMappers {
         userID = row.userID,
         nickname = row.nickname,
         faceURL = row.faceURL,
-        roleLevel = row.roleLevel?.toInt()?.let { GroupRoleLevel.entries.find { r -> r.value == it } },
+        roleLevel = row.roleLevel?.toInt()
+            ?.let { GroupRoleLevel.entries.find { r -> r.value == it } },
         joinTime = row.joinTime,
         joinSource = row.joinSource?.toInt(),
         operatorUserID = row.operatorUserID,

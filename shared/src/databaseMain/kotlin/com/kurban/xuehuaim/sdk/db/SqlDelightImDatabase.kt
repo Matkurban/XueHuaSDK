@@ -303,9 +303,11 @@ internal class SqlDelightImDatabase(
                 .map(SocialDbMappers::friendFromRow)
         }
 
-    override suspend fun getFriendByUserId(userId: String): FriendInfo? = withContext(ioDispatcher) {
-        queries.selectFriendByUserID(userId).executeAsOneOrNull()?.let(SocialDbMappers::friendFromRow)
-    }
+    override suspend fun getFriendByUserId(userId: String): FriendInfo? =
+        withContext(ioDispatcher) {
+            queries.selectFriendByUserID(userId).executeAsOneOrNull()
+                ?.let(SocialDbMappers::friendFromRow)
+        }
 
     override suspend fun insertOrReplaceFriend(friend: FriendInfo) = withContext(ioDispatcher) {
         queries.insertOrReplaceFriend(SocialDbMappers.friendToRow(friend))
