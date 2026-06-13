@@ -49,7 +49,7 @@ kotlin {
         minSdk = libs.versions.android.minSdk.get().toInt()
 
         compilerOptions {
-            jvmTarget = JvmTarget.JVM_11
+            jvmTarget = JvmTarget.JVM_17
         }
         withHostTest { }
     }
@@ -65,7 +65,7 @@ kotlin {
         val protoMain by creating {
             dependsOn(commonMain.get())
             kotlin.srcDir(protoGeneratedDir)
-            kotlin.srcDir("src/commonMain/proto-kotlin/kotlin")
+            kotlin.srcDir("src/commonMain/proto/kotlin")
             dependencies {
                 implementation(libs.protokt.runtime)
             }

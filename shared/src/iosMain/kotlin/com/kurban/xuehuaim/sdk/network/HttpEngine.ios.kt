@@ -1,4 +1,4 @@
-package com.kurban.xuehuaim.sdk.network.http
+package com.kurban.xuehuaim.sdk.network
 
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.darwin.Darwin
