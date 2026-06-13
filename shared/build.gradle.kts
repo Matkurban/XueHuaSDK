@@ -149,7 +149,7 @@ signing{
     sign(publishing.publications["kotlinMultiplatform"])
 }
 
-var version=libs.versions.version.get();
+var version=libs.versions.version.get()
 
 mavenPublishing {
     publishToMavenCentral()
