@@ -97,6 +97,8 @@ class MessageManager internal constructor(
 ) {
     private var conversationManager: ConversationManager? = null
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    internal val pendingUploadBytes = mutableMapOf<String, ByteArray>()
+    internal val pendingSnapshotBytes = mutableMapOf<String, ByteArray>()
 
     internal fun bindConversationManager(manager: ConversationManager) {
         conversationManager = manager
@@ -304,19 +306,36 @@ class MessageManager internal constructor(
                     "recvID and groupID are both empty"
                 )
             }
+            val existing = databaseService.getMessageByClientMsgId(message.clientMsgID)
+            if (existing != null) {
+                val status = existing.status
+                when (status) {
+                    MessageStatus.SEND_SUCCESS ->
+                        throw XueHuaException.from(SdkErrorCode.MSG_SEND_FAILED, "Message is repeated")
+                    MessageStatus.SEND_FAILED, MessageStatus.SENDING -> Unit
+                    else -> throw XueHuaException.from(SdkErrorCode.MSG_SEND_FAILED, "Message is repeated")
+                }
+            }
+            val uploadedMessage = handleMediaUploadIfNeeded(
+                fileUploadService = fileUploadService,
+                fileSystem = fileSystem,
+                pendingUploadBytes = pendingUploadBytes,
+                pendingSnapshotBytes = pendingSnapshotBytes,
+                message = message,
+            )
             val selfUser = databaseService.getAllUsers().find { it.userID == selfUserId }
             val sessionType = if (groupId.isNotEmpty()) {
                 ConversationType.SUPER_GROUP.value
             } else {
                 ConversationType.SINGLE.value
             }
-            val sendingMessage = message.copy(
+            val sendingMessage = uploadedMessage.copy(
                 sendID = selfUserId,
                 recvID = recvId.takeIf { groupId.isBlank() && it.isNotBlank() },
                 groupID = groupId.takeIf { it.isNotBlank() },
                 sessionType = ConversationType.entries.find { it.value == sessionType },
-                senderNickname = message.senderNickname ?: selfUser?.nickname,
-                senderFaceUrl = message.senderFaceUrl ?: selfUser?.faceURL,
+                senderNickname = uploadedMessage.senderNickname ?: selfUser?.nickname,
+                senderFaceUrl = uploadedMessage.senderFaceUrl ?: selfUser?.faceURL,
                 platformID = currentPlatform().value,
                 status = MessageStatus.SENDING,
                 msgFrom = USER_MSG_FROM,
@@ -333,13 +352,13 @@ class MessageManager internal constructor(
                 }
             databaseService.insertOrReplaceSendingMessage(
                 SendingMessage(
-                    clientMsgID = message.clientMsgID,
+                    clientMsgID = sendingMessage.clientMsgID,
                     conversationID = resolvedConversationId,
                 ),
             )
             eventEmitter.emitMessage(
                 com.kurban.xuehuaim.sdk.event.MessageEvent.SendProgress(
-                    clientMsgId = message.clientMsgID,
+                    clientMsgId = sendingMessage.clientMsgID,
                     progress = 0,
                 ),
             )
@@ -348,17 +367,17 @@ class MessageManager internal constructor(
                     sendID = selfUserId,
                     recvID = if (groupId.isNotEmpty()) "" else recvId,
                     groupID = groupId,
-                    clientMsgID = message.clientMsgID,
+                    clientMsgID = sendingMessage.clientMsgID,
                     senderPlatformID = currentPlatform().value,
                     senderNickname = selfUser?.nickname.orEmpty(),
                     senderFaceURL = selfUser?.faceURL.orEmpty(),
                     sessionType = sessionType,
                     msgFrom = USER_MSG_FROM,
-                    contentType = message.contentType?.value ?: MessageType.TEXT.value,
-                    contentBytes = (message.content ?: "").encodeToByteArray(),
-                    createTime = message.createTime
+                    contentType = sendingMessage.contentType?.value ?: MessageType.TEXT.value,
+                    contentBytes = (sendingMessage.content ?: "").encodeToByteArray(),
+                    createTime = sendingMessage.createTime
                         ?: com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
-                    atUserIDList = message.atTextElem?.atUserList.orEmpty(),
+                    atUserIDList = sendingMessage.atTextElem?.atUserList.orEmpty(),
                     offlinePush = offlinePush,
                 )
                 val response = webSocketService.sendRequest(
@@ -380,7 +399,7 @@ class MessageManager internal constructor(
                     )
                 val sent = sendingMessage.copy(
                     serverMsgID = respData.serverMsgID.takeIf { it.isNotBlank() },
-                    clientMsgID = respData.clientMsgID.ifBlank { message.clientMsgID },
+                    clientMsgID = respData.clientMsgID.ifBlank { sendingMessage.clientMsgID },
                     sendTime = respData.sendTime.takeIf { it > 0L },
                     status = MessageStatus.SEND_SUCCESS,
                 ).withParsedContent()
@@ -390,7 +409,7 @@ class MessageManager internal constructor(
                     messages = listOf(sent),
                 ).first()
                 databaseService.insertOrReplaceMessage(enriched)
-                databaseService.deleteSendingMessage(message.clientMsgID)
+                databaseService.deleteSendingMessage(sendingMessage.clientMsgID)
                 ConversationMessageUpdater.updateFromMessage(
                     databaseService = databaseService,
                     eventEmitter = eventEmitter,
@@ -410,12 +429,12 @@ class MessageManager internal constructor(
             } catch (e: Exception) {
                 val failed = sendingMessage.copy(status = MessageStatus.SEND_FAILED)
                 databaseService.insertOrReplaceMessage(failed)
-                databaseService.deleteSendingMessage(message.clientMsgID)
+                databaseService.deleteSendingMessage(sendingMessage.clientMsgID)
                 val code = (e as? XueHuaException)?.code ?: SdkErrorCode.MSG_SEND_FAILED.code
                 val error = e.message ?: SdkErrorCode.MSG_SEND_FAILED.message
                 eventEmitter.emitMessage(
                     com.kurban.xuehuaim.sdk.event.MessageEvent.SendFailed(
-                        clientMsgId = message.clientMsgID,
+                        clientMsgId = sendingMessage.clientMsgID,
                         code = code,
                         error = error,
                     ),
@@ -699,39 +718,23 @@ class MessageManager internal constructor(
             block()
         }
 
-    suspend fun createImageMessageFromFullPath(path: String, onProgress: ((Int) -> Unit)? = null): Message =
-        createImageMessageFromFullPath(fileSystem, fileUploadService, path, onProgress)
+    suspend fun createImageMessageFromFullPath(path: String): Message =
+        createImageMessageFromFullPath(fileSystem, path)
 
-    suspend fun createImageMessageFromBytes(
-        bytes: ByteArray,
-        fileName: String,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createImageMessageFromBytes(fileUploadService, bytes, fileName, onProgress)
+    suspend fun createImageMessageFromBytes(bytes: ByteArray, fileName: String): Message =
+        createImageMessageFromBytes(this, bytes, fileName)
 
-    suspend fun createSoundMessageFromFullPath(
-        path: String,
-        duration: Long,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createSoundMessageFromFullPath(fileSystem, fileUploadService, path, duration, onProgress)
+    suspend fun createSoundMessageFromFullPath(path: String, duration: Long): Message =
+        createSoundMessageFromFullPath(fileSystem, path, duration)
 
     suspend fun createVideoMessageFromFullPath(
         path: String,
         duration: Long,
         snapshotPath: String? = null,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createVideoMessageFromFullPath(
-        fileSystem,
-        fileUploadService,
-        path,
-        duration,
-        snapshotPath,
-        onProgress,
-    )
+    ): Message = createVideoMessageFromFullPath(fileSystem, path, duration, snapshotPath)
 
-    suspend fun createFileMessageFromFullPath(
-        path: String,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createFileMessageFromFullPath(fileSystem, fileUploadService, path, onProgress)
+    suspend fun createFileMessageFromFullPath(path: String): Message =
+        createFileMessageFromFullPath(fileSystem, path)
 
     suspend fun createVideoMessageFromBytes(
         bytes: ByteArray,
@@ -739,22 +742,10 @@ class MessageManager internal constructor(
         duration: Int,
         videoType: String? = null,
         snapshotBytes: ByteArray? = null,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createVideoMessageFromBytes(
-        fileUploadService,
-        bytes,
-        fileName,
-        duration,
-        videoType,
-        snapshotBytes,
-        onProgress,
-    )
+    ): Message = createVideoMessageFromBytes(this, bytes, fileName, duration, videoType, snapshotBytes)
 
-    suspend fun createFileMessageFromBytes(
-        bytes: ByteArray,
-        fileName: String,
-        onProgress: ((Int) -> Unit)? = null,
-    ): Message = createFileMessageFromBytes(fileUploadService, bytes, fileName, onProgress)
+    suspend fun createFileMessageFromBytes(bytes: ByteArray, fileName: String): Message =
+        createFileMessageFromBytes(this, bytes, fileName)
 
     suspend fun recoverSendingMessages() =
         recoverSendingMessages(databaseService, eventEmitter, loginUserId)

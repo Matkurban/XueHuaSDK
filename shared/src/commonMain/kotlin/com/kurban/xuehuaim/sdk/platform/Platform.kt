@@ -21,6 +21,10 @@ expect class GzipCodec {
 expect class FileSystem {
     fun readBytes(path: String): ByteArray
 
+    fun readBytes(path: String, offset: Long, length: Int): ByteArray
+
+    fun fileSize(path: String): Long
+
     fun writeBytes(path: String, data: ByteArray)
 
     fun exists(path: String): Boolean

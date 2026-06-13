@@ -28,6 +28,16 @@ actual class FileSystem {
     private val storage = mutableMapOf<String, ByteArray>()
 
     actual fun readBytes(path: String): ByteArray = storage[path] ?: ByteArray(0)
+
+    actual fun readBytes(path: String, offset: Long, length: Int): ByteArray {
+        val all = readBytes(path)
+        val start = offset.toInt().coerceIn(0, all.size)
+        val end = (start + length).coerceAtMost(all.size)
+        return if (start >= end) ByteArray(0) else all.copyOfRange(start, end)
+    }
+
+    actual fun fileSize(path: String): Long = (storage[path]?.size ?: 0).toLong()
+
     actual fun writeBytes(path: String, data: ByteArray) {
         storage[path] = data
     }

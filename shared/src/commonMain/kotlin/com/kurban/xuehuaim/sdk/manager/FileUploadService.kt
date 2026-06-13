@@ -1,5 +1,8 @@
 package com.kurban.xuehuaim.sdk.manager
 
+import com.kurban.xuehuaim.sdk.db.DatabaseService
+import com.kurban.xuehuaim.sdk.db.UploadPartsCodec
+import com.kurban.xuehuaim.sdk.db.UploadRecord
 import com.kurban.xuehuaim.sdk.enum.SdkErrorCode
 import com.kurban.xuehuaim.sdk.event.MessageEvent
 import com.kurban.xuehuaim.sdk.event.UploadProgressEvent
@@ -15,28 +18,66 @@ import com.kurban.xuehuaim.sdk.network.http.UploadKeyValue
 import com.kurban.xuehuaim.sdk.network.http.UploadPartSign
 import com.kurban.xuehuaim.sdk.network.http.UploadSignInfo
 import com.kurban.xuehuaim.sdk.platform.FileSystem
+import com.kurban.xuehuaim.sdk.util.System
 import com.kurban.xuehuaim.sdk.util.md5Hex
 
 internal class FileUploadService(
     private val apiService: ImApiService,
     private val httpClient: SdkHttpClient,
     private val fileSystem: FileSystem,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: () -> String?,
 ) {
     private var partLimitCache: PartLimitResp? = null
+
+    suspend fun uploadFile(
+        path: String,
+        fileName: String = path.substringAfterLast('/'),
+        onProgress: ((Int) -> Unit)? = null,
+        clientMsgId: String? = null,
+        cause: String = "",
+    ): UploadFileResult {
+        if (!fileSystem.exists(path)) {
+            throw XueHuaException.from(SdkErrorCode.FILE_UPLOAD_FAILED, "file not exist")
+        }
+        return uploadInternal(
+            source = UploadSource.Path(path),
+            fileName = fileName,
+            fileSize = fileSystem.fileSize(path),
+            onProgress = onProgress,
+            clientMsgId = clientMsgId,
+            cause = cause,
+        )
+    }
 
     suspend fun uploadFileBytes(
         bytes: ByteArray,
         fileName: String,
         onProgress: ((Int) -> Unit)? = null,
         clientMsgId: String? = null,
+        cause: String = "",
+    ): UploadFileResult = uploadInternal(
+        source = UploadSource.Bytes(bytes),
+        fileName = fileName,
+        fileSize = bytes.size.toLong(),
+        onProgress = onProgress,
+        clientMsgId = clientMsgId,
+        cause = cause,
+    )
+
+    private suspend fun uploadInternal(
+        source: UploadSource,
+        fileName: String,
+        fileSize: Long,
+        onProgress: ((Int) -> Unit)?,
+        clientMsgId: String?,
+        cause: String,
     ): UploadFileResult {
         val userId = loginUserId() ?: throw XueHuaException.from(SdkErrorCode.NOT_LOGIN)
-        val uploadId = fileSystem.md5(bytes)
-        val fileSize = bytes.size.toLong()
+        val progressId = clientMsgId ?: fileName
         eventEmitter.emitUploadProgress(
-            UploadProgressEvent(uploadId = uploadId, progress = 0, total = fileSize, current = 0),
+            UploadProgressEvent(uploadId = progressId, progress = 0, total = fileSize, current = 0),
         )
         clientMsgId?.let {
             eventEmitter.emitMessage(MessageEvent.SendProgress(clientMsgId = it, progress = 0))
@@ -48,13 +89,17 @@ internal class FileUploadService(
             if (index < partNum - 1) partSize.toInt() else (fileSize - partSize * (partNum - 1)).toInt()
         }
         val partMd5s = List(partNum) { index ->
-            val start = (index * partSize).toInt()
-            val end = (start + partSizes[index]).coerceAtMost(bytes.size)
-            fileSystem.md5(bytes.copyOfRange(start, end))
+            val start = index * partSize
+            val partBytes = readPartBytes(source, start, partSizes[index])
+            fileSystem.md5(partBytes)
         }
         val hash = md5Hex(partMd5s.joinToString(","))
         val objectName = buildObjectName(userId, fileName)
         val contentType = guessContentType(fileName)
+
+        val cachedTask = databaseService.getUploadByHashAndName(hash, objectName)
+        val cachedUploadId = cachedTask?.uploadID
+        val cachedUploadedParts = UploadPartsCodec.decode(cachedTask?.uploadedParts).toSet()
 
         val initResp = apiService.initiateMultipartUpload(
             InitiateMultipartUploadReq(
@@ -62,20 +107,20 @@ internal class FileUploadService(
                 size = fileSize,
                 partSize = partSize,
                 maxParts = partNum.coerceAtMost(20),
-                cause = "",
+                cause = cause,
                 name = objectName,
                 contentType = contentType,
             ),
         )
         initResp.url?.takeIf { it.isNotEmpty() }?.let { url ->
             onProgress?.invoke(100)
-            emitProgress(uploadId, clientMsgId, 100, fileSize, fileSize)
+            emitProgress(progressId, clientMsgId, 100, fileSize, fileSize)
             return UploadFileResult(url = url, uuid = hash)
         }
 
         val upload = initResp.upload ?: throw XueHuaException.from(
             SdkErrorCode.FILE_UPLOAD_FAILED,
-            "missing upload info"
+            "missing upload info",
         )
         val uploadID = upload.uploadID
         if (uploadID.isBlank()) {
@@ -86,15 +131,44 @@ internal class FileUploadService(
             throw XueHuaException.from(SdkErrorCode.FILE_UPLOAD_FAILED, "part size not match")
         }
 
+        val canResume = !cachedUploadId.isNullOrBlank() && cachedUploadId == uploadID
+        val partEtags = arrayOfNulls<String>(partNum)
+        var uploadedSize = 0L
+        if (canResume) {
+            for (part in cachedUploadedParts) {
+                val idx = part - 1
+                if (idx in 0 until partNum) {
+                    partEtags[idx] = partMd5s[idx]
+                    uploadedSize += partSizes[idx]
+                }
+            }
+        }
+
+        var uploadRecord = UploadRecord(
+            uploadID = uploadID,
+            hash = hash,
+            name = objectName,
+            fileSize = fileSize,
+            partSize = partSize,
+            partNum = partNum,
+            uploadedParts = UploadPartsCodec.encode(
+                if (canResume) cachedUploadedParts.sorted() else emptyList(),
+            ),
+            updateTime = System.currentTimeMillis(),
+        )
+        databaseService.upsertUploadTask(uploadRecord)
+
         val sign = upload.sign ?: UploadSignInfo()
         var currentSignParts = sign.parts
-        var uploadedSize = 0L
         for (index in 0 until partNum) {
+            if (partEtags[index] != null) {
+                continue
+            }
+
             val currentPartSize = partSizes[index]
             val partNumber = index + 1
-            val start = (index * partSize).toInt()
-            val end = (start + currentPartSize).coerceAtMost(bytes.size)
-            val partBytes = bytes.copyOfRange(start, end)
+            val start = index * partSize
+            val partBytes = readPartBytes(source, start, currentPartSize)
 
             var partInfo = currentSignParts.firstOrNull { it.partNumber == partNumber }
             if (partInfo == null) {
@@ -113,18 +187,36 @@ internal class FileUploadService(
                 "missing sign for part $partNumber",
             )
             val putUrl = buildPartPutUrl(sign, resolvedPart)
-            val headers = buildPartHeaders(sign.header, resolvedPart.header)
-            if (putUrl.isNotEmpty()) {
-                httpClient.putBytes(putUrl, partBytes, headers)
+            if (putUrl.isBlank()) {
+                throw XueHuaException.from(
+                    SdkErrorCode.FILE_UPLOAD_FAILED,
+                    "missing put url for part $partNumber",
+                )
             }
+            val headers = buildPartHeaders(sign.header, resolvedPart.header)
+            httpClient.putBytes(putUrl, partBytes, headers)
+
             val localMd5 = fileSystem.md5(partBytes)
             if (localMd5 != partMd5s[index]) {
                 throw XueHuaException.from(SdkErrorCode.FILE_UPLOAD_FAILED, "part md5 mismatch")
             }
+
+            partEtags[index] = partMd5s[index]
             uploadedSize += currentPartSize
+            val uploadedParts = buildList {
+                for (idx in 0 until partNum) {
+                    if (partEtags[idx] != null) add(idx + 1)
+                }
+            }
+            uploadRecord = uploadRecord.copy(
+                uploadedParts = UploadPartsCodec.encode(uploadedParts),
+                updateTime = System.currentTimeMillis(),
+            )
+            databaseService.upsertUploadTask(uploadRecord)
+
             val progress = ((uploadedSize * 100) / fileSize).toInt().coerceIn(0, 100)
             onProgress?.invoke(progress)
-            emitProgress(uploadId, clientMsgId, progress, fileSize, uploadedSize)
+            emitProgress(progressId, clientMsgId, progress, fileSize, uploadedSize)
         }
 
         val completeResp = apiService.completeMultipartUpload(
@@ -139,10 +231,21 @@ internal class FileUploadService(
         if (resultUrl.isBlank()) {
             throw XueHuaException.from(SdkErrorCode.FILE_UPLOAD_FAILED, "empty upload url")
         }
+        databaseService.deleteUpload(uploadID)
         onProgress?.invoke(100)
-        emitProgress(uploadId, clientMsgId, 100, fileSize, fileSize)
+        emitProgress(progressId, clientMsgId, 100, fileSize, fileSize)
         return UploadFileResult(url = resultUrl, uuid = hash)
     }
+
+    private fun readPartBytes(source: UploadSource, offset: Long, length: Int): ByteArray =
+        when (source) {
+            is UploadSource.Bytes -> {
+                val start = offset.toInt()
+                val end = (start + length).coerceAtMost(source.data.size)
+                source.data.copyOfRange(start, end)
+            }
+            is UploadSource.Path -> fileSystem.readBytes(source.path, offset, length)
+        }
 
     private suspend fun emitProgress(
         uploadId: String,
@@ -237,6 +340,11 @@ internal class FileUploadService(
     private fun guessContentType(fileName: String): String {
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return MIME_TYPES[ext] ?: "application/octet-stream"
+    }
+
+    private sealed class UploadSource {
+        data class Bytes(val data: ByteArray) : UploadSource()
+        data class Path(val path: String) : UploadSource()
     }
 
     private companion object {

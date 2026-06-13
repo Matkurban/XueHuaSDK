@@ -105,7 +105,6 @@ internal object ImApiRoutes {
     const val PULL_BY_SEQ = "/msg/pull_msg_by_seq"
     const val SEARCH_MSG = "/msg/search_msg"
     const val FCM_UPDATE_TOKEN = "/third/fcm_update_token"
-    const val UPLOAD_FILE = "/third/minio_upload"
     const val OBJECT_PART_LIMIT = "/object/part_limit"
     const val OBJECT_INITIATE_MULTIPART_UPLOAD = "/object/initiate_multipart_upload"
     const val OBJECT_AUTH_SIGN = "/object/auth_sign"

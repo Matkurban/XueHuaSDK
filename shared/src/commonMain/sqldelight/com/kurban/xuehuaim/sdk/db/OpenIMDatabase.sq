@@ -213,6 +213,8 @@ CREATE TABLE local_uploads (
     updateTime INTEGER
 );
 
+CREATE INDEX IF NOT EXISTS idx_local_uploads_hash_name ON local_uploads(hash, name);
+
 CREATE TABLE local_version_sync (
     id TEXT NOT NULL PRIMARY KEY,
     tableName TEXT NOT NULL,
@@ -449,6 +451,9 @@ INSERT OR REPLACE INTO local_uploads VALUES ?;
 
 selectUploadByID:
 SELECT * FROM local_uploads WHERE uploadID = ? LIMIT 1;
+
+selectUploadByHashAndName:
+SELECT * FROM local_uploads WHERE hash = ? AND name = ? LIMIT 1;
 
 deleteUploadByID:
 DELETE FROM local_uploads WHERE uploadID = ?;

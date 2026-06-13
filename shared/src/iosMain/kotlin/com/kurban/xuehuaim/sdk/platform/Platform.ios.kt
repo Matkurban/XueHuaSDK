@@ -42,6 +42,18 @@ actual class FileSystem {
         return data.toByteArray()
     }
 
+    actual fun readBytes(path: String, offset: Long, length: Int): ByteArray {
+        val all = readBytes(path)
+        val start = offset.toInt().coerceIn(0, all.size)
+        val end = (start + length).coerceAtMost(all.size)
+        return if (start >= end) ByteArray(0) else all.copyOfRange(start, end)
+    }
+
+    actual fun fileSize(path: String): Long {
+        val attrs = NSFileManager.defaultManager.attributesOfItemAtPath(path, error = null)
+        return (attrs?.get("NSFileSize") as? Number)?.toLong() ?: readBytes(path).size.toLong()
+    }
+
     actual fun writeBytes(path: String, data: ByteArray) {
         val parent = path.substringBeforeLast('/', missingDelimiterValue = "")
         if (parent.isNotEmpty()) {

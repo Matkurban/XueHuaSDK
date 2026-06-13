@@ -38,6 +38,25 @@ actual class GzipCodec {
 
 actual class FileSystem {
     actual fun readBytes(path: String): ByteArray = File(path).readBytes()
+
+    actual fun readBytes(path: String, offset: Long, length: Int): ByteArray {
+        File(path).inputStream().use { input ->
+            if (offset > 0) {
+                input.skip(offset)
+            }
+            val buffer = ByteArray(length)
+            var read = 0
+            while (read < length) {
+                val count = input.read(buffer, read, length - read)
+                if (count <= 0) break
+                read += count
+            }
+            return if (read == length) buffer else buffer.copyOf(read)
+        }
+    }
+
+    actual fun fileSize(path: String): Long = File(path).length()
+
     actual fun writeBytes(path: String, data: ByteArray) {
         File(path).parentFile?.mkdirs()
         File(path).writeBytes(data)

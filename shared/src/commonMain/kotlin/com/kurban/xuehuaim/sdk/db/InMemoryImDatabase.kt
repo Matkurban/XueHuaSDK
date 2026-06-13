@@ -565,6 +565,11 @@ internal class InMemoryImDatabase : ImDatabase {
         mutex.withLock { uploads[uploadId] }
     }
 
+    override suspend fun getUploadByHashAndName(hash: String, name: String): UploadRecord? =
+        withContext(ioDispatcher) {
+            mutex.withLock { uploads.values.firstOrNull { it.hash == hash && it.name == name } }
+        }
+
     override suspend fun deleteUpload(uploadId: String) = withContext(ioDispatcher) {
         mutex.withLock {
             uploads.remove(uploadId)

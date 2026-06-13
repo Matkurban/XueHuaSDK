@@ -125,6 +125,13 @@ class IMManager internal constructor(
 
     private val log = SdkLogger.tag("IMManager")
 
+    init {
+        msgSyncer.bindBackgroundSync {
+            momentsManager.syncFromServer()
+            favoriteManager.syncFromServer()
+        }
+    }
+
     val isInitialized: Boolean get() = initialized
 
     suspend fun initSDK(config: InitConfig): Boolean = withContext(ioDispatcher) {
@@ -165,6 +172,7 @@ class IMManager internal constructor(
         val user = users.firstOrNull() ?: UserInfo(userID = userId)
         eventEmitter.setLoginStatus(LoginStatus.LOGGED)
         webSocketService.connect(userId, token)
+        messageManager.recoverSendingMessages()
         user
     }
 
@@ -284,19 +292,23 @@ class IMManager internal constructor(
         eventEmitter.setConnectionState(ConnectionState.DISCONNECTED)
     }
 
-    suspend fun uploadFile(path: String, onProgress: ((Int) -> Unit)? = null): UploadFileResult =
-        withContext(ioDispatcher) {
-            ensureLoggedIn()
-            uploadFileBytes(fileSystem.readBytes(path), path.substringAfterLast('/'), onProgress)
-        }
+    suspend fun uploadFile(
+        path: String,
+        onProgress: ((Int) -> Unit)? = null,
+        clientMsgId: String? = null,
+    ): UploadFileResult = withContext(ioDispatcher) {
+        ensureLoggedIn()
+        fileUploadService.uploadFile(path, onProgress = onProgress, clientMsgId = clientMsgId)
+    }
 
     suspend fun uploadFileBytes(
         bytes: ByteArray,
         fileName: String,
         onProgress: ((Int) -> Unit)? = null,
+        clientMsgId: String? = null,
     ): UploadFileResult = withContext(ioDispatcher) {
         ensureLoggedIn()
-        fileUploadService.uploadFileBytes(bytes, fileName, onProgress)
+        fileUploadService.uploadFileBytes(bytes, fileName, onProgress, clientMsgId)
     }
 
     fun getLoginUserId(): String? = authData?.userID
@@ -463,6 +475,7 @@ class IMManager internal constructor(
                 apiService = apiService,
                 httpClient = httpClient,
                 fileSystem = fileSystem,
+                databaseService = databaseService,
                 eventEmitter = eventEmitter,
                 loginUserId = { loginUserIdHolder.userId },
             )

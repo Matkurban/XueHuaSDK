@@ -496,19 +496,13 @@ internal class SqlDelightImDatabase(
     }
 
     override suspend fun getUpload(uploadId: String): UploadRecord? = withContext(ioDispatcher) {
-        queries.selectUploadByID(uploadId).executeAsOneOrNull()?.let { row ->
-            UploadRecord(
-                uploadID = row.uploadID,
-                hash = row.hash,
-                name = row.name,
-                fileSize = row.fileSize,
-                partSize = row.partSize,
-                partNum = row.partNum?.toInt(),
-                uploadedParts = row.uploadedParts,
-                updateTime = row.updateTime,
-            )
-        }
+        queries.selectUploadByID(uploadId).executeAsOneOrNull()?.toUploadRecord()
     }
+
+    override suspend fun getUploadByHashAndName(hash: String, name: String): UploadRecord? =
+        withContext(ioDispatcher) {
+            queries.selectUploadByHashAndName(hash, name).executeAsOneOrNull()?.toUploadRecord()
+        }
 
     override suspend fun deleteUpload(uploadId: String) = withContext(ioDispatcher) {
         queries.deleteUploadByID(uploadId)
@@ -557,5 +551,16 @@ internal class SqlDelightImDatabase(
         isExternalExtensions = 0L,
         hasReadTime = null,
         conversationID = conversationID,
+    )
+
+    private fun Local_uploads.toUploadRecord(): UploadRecord = UploadRecord(
+        uploadID = uploadID,
+        hash = hash,
+        name = name,
+        fileSize = fileSize,
+        partSize = partSize,
+        partNum = partNum?.toInt(),
+        uploadedParts = uploadedParts,
+        updateTime = updateTime,
     )
 }

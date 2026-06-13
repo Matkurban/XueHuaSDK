@@ -12,6 +12,7 @@ import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.notify.NotificationDispatcher
 import com.kurban.xuehuaim.sdk.network.ws.WebSocketService
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
+import com.kurban.xuehuaim.sdk.platform.sdkScope
 import com.kurban.xuehuaim.sdk.sync.ConversationSync
 import com.kurban.xuehuaim.sdk.sync.FriendSync
 import com.kurban.xuehuaim.sdk.sync.GroupSync
@@ -19,6 +20,7 @@ import com.kurban.xuehuaim.sdk.sync.MessageDisplayEnricher
 import com.kurban.xuehuaim.sdk.util.ConversationMessageUpdater
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import com.kurban.xuehuaim.sdk.util.withParsedContent
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal class MsgSyncer(
@@ -31,6 +33,7 @@ internal class MsgSyncer(
     private val log = SdkLogger.tag("MsgSyncer")
     private var userId: String = ""
     private var callManager: CallManager? = null
+    private var backgroundSyncHandler: (suspend () -> Unit)? = null
     private val conversationMaxSeq = mutableMapOf<String, Long>()
 
     fun bindUser(userId: String) {
@@ -39,6 +42,10 @@ internal class MsgSyncer(
 
     fun bindCallManager(manager: CallManager) {
         callManager = manager
+    }
+
+    fun bindBackgroundSync(handler: suspend () -> Unit) {
+        backgroundSyncHandler = handler
     }
 
     suspend fun start() {
@@ -72,6 +79,12 @@ internal class MsgSyncer(
         val visibleCount = databaseService.getVisibleConversations().size
         log.info { "connected sync finished: visible=$visibleCount" }
         eventEmitter.emitConversation(ConversationEvent.SyncFinished(visibleCount))
+        backgroundSyncHandler?.let { handler ->
+            sdkScope.launch {
+                runCatching { handler() }
+                    .onFailure { e -> log.warn(e) { "background sync failed" } }
+            }
+        }
     }
 
     suspend fun triggerWakeupSync() = withContext(ioDispatcher) {

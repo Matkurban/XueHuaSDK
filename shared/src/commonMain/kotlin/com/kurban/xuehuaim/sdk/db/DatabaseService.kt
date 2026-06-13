@@ -307,6 +307,13 @@ class DatabaseService(
 
     suspend fun deleteSendingMessage(clientMsgId: String) = db().deleteSendingMessage(clientMsgId)
 
+    suspend fun upsertUploadTask(record: UploadRecord) = db().insertOrReplaceUpload(record)
+
+    suspend fun getUploadByHashAndName(hash: String, name: String): UploadRecord? =
+        db().getUploadByHashAndName(hash, name)
+
+    suspend fun deleteUpload(uploadId: String) = db().deleteUpload(uploadId)
+
     suspend fun markConversationNotInGroup(groupId: String) {
         val conversationId = OpenImUtils.genGroupConversationID(groupId)
         getConversation(conversationId)?.let { conv ->

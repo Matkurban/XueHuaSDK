@@ -89,6 +89,7 @@ internal interface ImDatabase {
 
     suspend fun insertOrReplaceUpload(record: UploadRecord)
     suspend fun getUpload(uploadId: String): UploadRecord?
+    suspend fun getUploadByHashAndName(hash: String, name: String): UploadRecord?
     suspend fun deleteUpload(uploadId: String)
 
     suspend fun getNotificationSeq(conversationId: String): Long
