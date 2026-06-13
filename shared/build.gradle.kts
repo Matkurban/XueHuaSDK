@@ -149,12 +149,33 @@ signing{
     sign(publishing.publications["kotlinMultiplatform"])
 }
 
+var version=libs.versions.version.get();
 
 mavenPublishing {
-    coordinates("io.github.matkurban", "xuehuasdk", "1.0.0")
+    publishToMavenCentral()
+    signAllPublications()
+    coordinates("io.github.matkurban", "xuehuasdk", version)
     configure(KotlinMultiplatform())
     pom {
         name.set("XueHuaSDK")
         description.set("XueHua IM Kotlin Multiplatform SDK")
+        url.set("https://github.com/Matkurban/XueHuaSDK")
+        licenses {
+            license {
+                name.set("MIT")
+                url.set("https://opensource.org/licenses/MIT")
+            }
+        }
+        developers {
+            developer {
+                id.set("matkurban")
+                name.set("Matkurban")
+            }
+        }
+        scm {
+            url.set("https://github.com/Matkurban/XueHuaSDK")
+            connection.set("scm:git:git://github.com/Matkurban/XueHuaSDK.git")
+            developerConnection.set("scm:git:ssh://git@github.com/Matkurban/XueHuaSDK.git")
+        }
     }
 }
