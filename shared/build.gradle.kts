@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.mavenPublish)
+    signing
 }
 
 val syncWireSources = tasks.register<Sync>("syncWireSources") {
@@ -131,6 +132,12 @@ sqldelight {
         }
     }
 }
+
+signing{
+    useGpgCmd()
+    sign(publishing.publications["kotlinMultiplatform"])
+}
+
 
 mavenPublishing {
     coordinates("io.github.matkurban", "xuehuasdk", "1.0.0")
