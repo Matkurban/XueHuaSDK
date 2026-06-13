@@ -4,10 +4,10 @@ XueHua IM 的 Kotlin Multiplatform SDK，支持 Android、iOS、JVM、JS 与 Was
 
 ## 模块结构
 
-| 模块 | 说明 |
-|------|------|
-| `:shared` | 对外发布的 KMP SDK（网络、同步、数据库、事件等） |
-| `:proto` | OpenIM `.proto` 定义，使用 [Square Wire](https://square.github.io/wire/) 生成 Kotlin 代码 |
+| 模块        | 说明                                                                               |
+|-----------|----------------------------------------------------------------------------------|
+| `:shared` | 对外发布的 KMP SDK（网络、同步、数据库、事件等）                                                     |
+| `:proto`  | OpenIM `.proto` 定义，使用 [Square Wire](https://square.github.io/wire/) 生成 Kotlin 代码 |
 
 ## 环境要求
 
@@ -224,14 +224,14 @@ val imManager = OpenIM.iMManager
 
 ## 主要技术栈
 
-| 能力 | 库 | catalog 别名 |
-|------|-----|-------------|
-| 网络 | Ktor Client | `libs.ktor.client.*` |
-| Protobuf | Square Wire | `libs.wire.runtime` / `libs.plugins.wire` |
-| 本地数据库 | SQLDelight | `libs.sqldelight.*` |
-| 序列化 | kotlinx.serialization | `libs.kotlinx.serialization.json` |
-| DI | Koin | `libs.koin.core` |
-| 协程 | kotlinx.coroutines | `libs.kotlinx.coroutines.core` |
+| 能力       | 库                     | catalog 别名                                |
+|----------|-----------------------|-------------------------------------------|
+| 网络       | Ktor Client           | `libs.ktor.client.*`                      |
+| Protobuf | Square Wire           | `libs.wire.runtime` / `libs.plugins.wire` |
+| 本地数据库    | SQLDelight            | `libs.sqldelight.*`                       |
+| 序列化      | kotlinx.serialization | `libs.kotlinx.serialization.json`         |
+| DI       | Koin                  | `libs.koin.core`                          |
+| 协程       | kotlinx.coroutines    | `libs.kotlinx.coroutines.core`            |
 
 ## 许可证
 
