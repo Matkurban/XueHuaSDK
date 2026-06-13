@@ -37,6 +37,8 @@ actual class FileSystem {
 actual class DatabaseDriverFactory {
     actual fun createDriver(dbPath: String): SqlDriver =
         NativeSqliteDriver(OpenIMDatabase.Schema, dbPath.substringAfterLast('/'))
+
+    actual suspend fun initializeSchema(driver: SqlDriver) = Unit
 }
 
 actual fun createGzipCodec(): GzipCodec = GzipCodec()

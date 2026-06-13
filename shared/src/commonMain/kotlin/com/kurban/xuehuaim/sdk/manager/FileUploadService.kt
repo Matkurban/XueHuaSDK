@@ -1,6 +1,7 @@
 package com.kurban.xuehuaim.sdk.manager
 
 import com.kurban.xuehuaim.sdk.enum.SdkErrorCode
+import com.kurban.xuehuaim.sdk.event.MessageEvent
 import com.kurban.xuehuaim.sdk.event.UploadProgressEvent
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
@@ -29,6 +30,7 @@ internal class FileUploadService(
         bytes: ByteArray,
         fileName: String,
         onProgress: ((Int) -> Unit)? = null,
+        clientMsgId: String? = null,
     ): UploadFileResult {
         val userId = loginUserId() ?: throw XueHuaException.from(SdkErrorCode.NOT_LOGIN)
         val uploadId = fileSystem.md5(bytes)
@@ -36,6 +38,9 @@ internal class FileUploadService(
         eventEmitter.emitUploadProgress(
             UploadProgressEvent(uploadId = uploadId, progress = 0, total = fileSize, current = 0),
         )
+        clientMsgId?.let {
+            eventEmitter.emitMessage(MessageEvent.SendProgress(clientMsgId = it, progress = 0))
+        }
 
         val partSize = resolvePartSize(fileSize)
         val partNum = ((fileSize + partSize - 1) / partSize).toInt().coerceIn(1, 10000)
@@ -64,14 +69,7 @@ internal class FileUploadService(
         )
         initResp.url?.takeIf { it.isNotEmpty() }?.let { url ->
             onProgress?.invoke(100)
-            eventEmitter.emitUploadProgress(
-                UploadProgressEvent(
-                    uploadId = uploadId,
-                    progress = 100,
-                    total = fileSize,
-                    current = fileSize
-                ),
-            )
+            emitProgress(uploadId, clientMsgId, 100, fileSize, fileSize)
             return UploadFileResult(url = url, uuid = hash)
         }
 
@@ -126,14 +124,7 @@ internal class FileUploadService(
             uploadedSize += currentPartSize
             val progress = ((uploadedSize * 100) / fileSize).toInt().coerceIn(0, 100)
             onProgress?.invoke(progress)
-            eventEmitter.emitUploadProgress(
-                UploadProgressEvent(
-                    uploadId = uploadId,
-                    progress = progress,
-                    total = fileSize,
-                    current = uploadedSize,
-                ),
-            )
+            emitProgress(uploadId, clientMsgId, progress, fileSize, uploadedSize)
         }
 
         val completeResp = apiService.completeMultipartUpload(
@@ -149,15 +140,23 @@ internal class FileUploadService(
             throw XueHuaException.from(SdkErrorCode.FILE_UPLOAD_FAILED, "empty upload url")
         }
         onProgress?.invoke(100)
-        eventEmitter.emitUploadProgress(
-            UploadProgressEvent(
-                uploadId = uploadId,
-                progress = 100,
-                total = fileSize,
-                current = fileSize
-            ),
-        )
+        emitProgress(uploadId, clientMsgId, 100, fileSize, fileSize)
         return UploadFileResult(url = resultUrl, uuid = hash)
+    }
+
+    private suspend fun emitProgress(
+        uploadId: String,
+        clientMsgId: String?,
+        progress: Int,
+        total: Long,
+        current: Long,
+    ) {
+        eventEmitter.emitUploadProgress(
+            UploadProgressEvent(uploadId = uploadId, progress = progress, total = total, current = current),
+        )
+        clientMsgId?.let {
+            eventEmitter.emitMessage(MessageEvent.SendProgress(clientMsgId = it, progress = progress))
+        }
     }
 
     private suspend fun resolvePartSize(fileSize: Long): Long {

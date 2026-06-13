@@ -4,6 +4,13 @@ import com.kurban.xuehuaim.sdk.enum.IMPlatform
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.model.ApiResponse
 import com.kurban.xuehuaim.sdk.model.AppealInfo
+import com.kurban.xuehuaim.sdk.model.AppealCaptcha
+import com.kurban.xuehuaim.sdk.model.AppealUploadResult
+import com.kurban.xuehuaim.sdk.model.CreateReportResult
+import com.kurban.xuehuaim.sdk.model.FavoriteListResponse
+import com.kurban.xuehuaim.sdk.model.MomentComment
+import com.kurban.xuehuaim.sdk.model.MomentLike
+import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.model.ApplicationVersionInfo
 import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
@@ -19,7 +26,9 @@ import com.kurban.xuehuaim.sdk.model.JoinMeetingResult
 import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
+import com.kurban.xuehuaim.sdk.model.RedPacketDetail
 import com.kurban.xuehuaim.sdk.model.ReportInfo
+import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgBySeqsReq
@@ -37,6 +46,10 @@ internal object ImApiRoutes {
     const val PARSE_TOKEN = "/auth/parse_token"
     const val FORCE_LOGOUT = "/auth/force_logout"
     const val GET_USERS_INFO = "/user/get_users_info"
+    const val SUBSCRIBE_USERS_STATUS = "/user/subscribe_users_status"
+    const val GET_SUBSCRIBE_USERS_STATUS = "/user/get_subscribe_users_status"
+    const val GET_USERS_STATUS = "/user/get_users_status"
+    const val GET_USER_CLIENT_CONFIG = "/user/get_user_client_config"
     const val UPDATE_USER_INFO = "/user/update_user_info"
     const val GET_ALL_CONVERSATIONS = "/conversation/get_all_conversations"
     const val GET_INCREMENTAL_CONVERSATIONS = "/conversation/get_incremental_conversations"
@@ -46,6 +59,10 @@ internal object ImApiRoutes {
     const val ADD_FRIEND = "/friend/add_friend"
     const val DELETE_FRIEND = "/friend/delete_friend"
     const val GET_FRIEND_APPLICATIONS = "/friend/get_friend_apply_list"
+    const val GET_SELF_FRIEND_APPLICATIONS = "/friend/get_self_friend_apply_list"
+    const val GET_SELF_UNHANDLED_APPLY_COUNT = "/friend/get_self_unhandled_apply_count"
+    const val GET_DESIGNATED_FRIENDS = "/friend/get_designated_friends"
+    const val UPDATE_FRIENDS = "/friend/update_friends"
     const val ACCEPT_FRIEND = "/friend/add_friend_response"
     const val REFUSE_FRIEND = "/friend/add_friend_response"
     const val ADD_BLACK = "/friend/add_black"
@@ -58,12 +75,21 @@ internal object ImApiRoutes {
     const val SET_GROUP_INFO_EX = "/group/set_group_info_ex"
     const val DISMISS_GROUP = "/group/dismiss_group"
     const val JOIN_GROUP = "/group/join_group"
+    const val GROUP_APPLICATION_RESPONSE = "/group/group_application_response"
     const val QUIT_GROUP = "/group/quit_group"
     const val GET_GROUP_MEMBERS = "/group/get_group_member_list"
     const val INVITE_TO_GROUP = "/group/invite_user_to_group"
     const val KICK_GROUP_MEMBER = "/group/kick_group"
+    const val TRANSFER_GROUP = "/group/transfer_group"
+    const val MUTE_GROUP_MEMBER = "/group/mute_group_member"
+    const val CANCEL_MUTE_GROUP_MEMBER = "/group/cancel_mute_group_member"
+    const val MUTE_GROUP = "/group/mute_group"
+    const val CANCEL_MUTE_GROUP = "/group/cancel_mute_group"
+    const val SET_GROUP_MEMBER_INFO = "/group/set_group_member_info"
+    const val GET_GROUP_MEMBERS_INFO = "/group/get_group_members_info"
     const val GET_RECV_GROUP_APPLICATION_LIST = "/group/get_recv_group_applicationList"
     const val GET_SEND_GROUP_APPLICATION_LIST = "/group/get_user_req_group_applicationList"
+    const val GET_GROUP_APPLICATION_UNHANDLED_COUNT = "/group/get_group_application_unhandled_count"
     const val SEND_MSG = "/msg/send_msg"
     const val REVOKE_MSG = "/msg/revoke_msg"
     const val DELETE_MSG = "/msg/delete_msgs"
@@ -71,9 +97,11 @@ internal object ImApiRoutes {
     const val MARK_CONVERSATION_AS_READ = "/msg/mark_conversation_as_read"
     const val GET_CONVERSATIONS_HAS_READ_AND_MAX_SEQ = "/msg/get_conversations_has_read_and_max_seq"
     const val CLEAR_CONVERSATION_MSG = "/msg/clear_conversation_msg"
+    const val CLEAR_ALL_MSG = "/msg/user_clear_all_msg"
     const val GET_MAX_SEQ = "/msg/get_max_seq"
     const val PULL_BY_SEQ = "/msg/pull_msg_by_seq"
     const val SEARCH_MSG = "/msg/search_msg"
+    const val FCM_UPDATE_TOKEN = "/third/fcm_update_token"
     const val UPLOAD_FILE = "/third/minio_upload"
     const val OBJECT_PART_LIMIT = "/object/part_limit"
     const val OBJECT_INITIATE_MULTIPART_UPLOAD = "/object/initiate_multipart_upload"
@@ -109,6 +137,12 @@ internal object ChatApiRoutes {
     const val RTC_GET_TOKEN = "/user/rtc/get_rtc_token"
     const val DELETE_ACCOUNT = "/account/delete"
     const val SEARCH_USER = "/user/search/full"
+    const val SEARCH_FRIEND = "/friend/search"
+    const val FAVORITE_REMOVE = "/favorite/remove"
+    const val CREATE_REPORT = "/report/create"
+    const val APPEAL_CAPTCHA = "/public/appeal/captcha"
+    const val APPEAL_UPLOAD = "/public/appeal/upload"
+    const val LATEST_APPLICATION_VERSION = "/application/latest_version"
     const val UPDATE_USER = "/user/update"
     const val PAYMENT_PASSWORD_SET = "/user/payment_password/set"
     const val PAYMENT_PASSWORD_CHANGE = "/user/payment_password/change"
@@ -118,9 +152,9 @@ internal object ChatApiRoutes {
     const val POINTS_TRANSACTIONS = "/points/transactions"
     const val GET_USER_FULL = "/user/find/full"
     const val PAYMENT_PASSWORD_RESET = "/user/payment_password/reset"
-    const val RED_PACKET_SEND = "/redpacket/send"
-    const val RED_PACKET_GRAB = "/redpacket/grab"
-    const val RED_PACKET_DETAIL = "/redpacket/detail"
+    const val RED_PACKET_SEND = "/red_packet/send"
+    const val RED_PACKET_GRAB = "/red_packet/grab"
+    const val RED_PACKET_DETAIL = "/red_packet/detail"
     const val REPORT_SUBMIT = "/report/submit"
     const val APP_VERSION = "/application/version"
 }
@@ -128,6 +162,8 @@ internal object ChatApiRoutes {
 internal object AdminApiRoutes {
     const val APPEAL_SUBMIT = "/public/appeal/submit"
     const val APPEAL_LIST = "/public/appeal/list"
+    const val APPEAL_CAPTCHA = "/public/appeal/captcha"
+    const val APPEAL_UPLOAD = "/public/appeal/upload"
 }
 
 @Serializable
@@ -572,6 +608,21 @@ internal data class AppVersionReq(
 )
 
 @Serializable
+internal data class UserStatusListResp(
+    @SerialName("statusList") val statusList: List<UserStatusInfo> = emptyList(),
+)
+
+@Serializable
+internal data class UserClientConfigResp(
+    @SerialName("config") val config: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+internal data class LatestAppVersionResp(
+    @SerialName("version") val version: ApplicationVersionInfo? = null,
+)
+
+@Serializable
 internal data class DeleteAccountReq(
     @SerialName("currentPassword") val currentPassword: String,
 )
@@ -689,6 +740,109 @@ internal data class GetGroupMemberListReq(
 @Serializable
 internal data class GetGroupMemberListResp(
     @SerialName("members") val members: List<GroupMemberInfo> = emptyList(),
+)
+
+@Serializable
+internal data class RevokeMsgReq(
+    @SerialName("userID") val userID: String,
+    @SerialName("conversationID") val conversationID: String,
+    @SerialName("seq") val seq: Long,
+)
+
+@Serializable
+internal data class DeleteMsgsReq(
+    @SerialName("userID") val userID: String,
+    @SerialName("conversationID") val conversationID: String,
+    @SerialName("seqs") val seqs: List<Long>,
+)
+
+@Serializable
+internal data class MarkMsgsAsReadReq(
+    @SerialName("userID") val userID: String,
+    @SerialName("conversationID") val conversationID: String,
+    @SerialName("seqs") val seqs: List<Long>,
+)
+
+@Serializable
+internal data class SearchMsgReq(
+    @SerialName("sendID") val sendID: String? = null,
+    @SerialName("recvID") val recvID: String? = null,
+    @SerialName("groupID") val groupID: String? = null,
+    @SerialName("contentType") val contentType: Int? = null,
+    @SerialName("keyword") val keyword: String = "",
+    @SerialName("pagination") val pagination: Pagination,
+)
+
+@Serializable
+internal data class SearchMsgResp(
+    @SerialName("chatLogs") val chatLogs: List<Message> = emptyList(),
+    @SerialName("chatLogsNum") val chatLogsNum: Int = 0,
+)
+
+@Serializable
+internal data class JoinGroupReq(
+    @SerialName("groupID") val groupID: String,
+    @SerialName("reqMessage") val reqMessage: String = "",
+    @SerialName("joinSource") val joinSource: Int = 3,
+    @SerialName("inviterUserID") val inviterUserID: String = "",
+    @SerialName("ex") val ex: String = "",
+)
+
+@Serializable
+internal data class GroupApplicationResponseReq(
+    @SerialName("groupID") val groupID: String,
+    @SerialName("fromUserID") val fromUserID: String,
+    @SerialName("handledMsg") val handledMsg: String,
+    @SerialName("handleResult") val handleResult: Int,
+)
+
+@Serializable
+internal data class GetGroupApplicationUnhandledCountReq(
+    @SerialName("userID") val userID: String,
+    @SerialName("time") val time: Long = 0,
+)
+
+@Serializable
+internal data class GetGroupApplicationUnhandledCountResp(
+    @SerialName("count") val count: Int = 0,
+)
+
+@Serializable
+internal data class ResetPaymentPasswordReq(
+    @SerialName("areaCode") val areaCode: String? = null,
+    @SerialName("phoneNumber") val phoneNumber: String? = null,
+    @SerialName("email") val email: String? = null,
+    @SerialName("verifyCode") val verifyCode: String,
+    @SerialName("newPaymentPassword") val newPaymentPassword: String,
+)
+
+@Serializable
+internal data class FcmUpdateTokenReq(
+    @SerialName("platformID") val platformID: String,
+    @SerialName("fcmToken") val fcmToken: String,
+    @SerialName("account") val account: String,
+    @SerialName("expireTime") val expireTime: Long = 0,
+)
+
+@Serializable
+internal data class ForceLogoutReq(
+    @SerialName("platformID") val platformID: Int,
+    @SerialName("userID") val userID: String,
+)
+
+@Serializable
+internal data class SendRedPacketResp(
+    @SerialName("packetID") val packetID: String,
+)
+
+@Serializable
+internal data class GrabRedPacketResp(
+    @SerialName("amount") val amount: Double,
+)
+
+@Serializable
+internal data class ClearAllMsgReq(
+    @SerialName("userID") val userID: String,
 )
 
 internal fun ServerGroupRequestDto.toGroupApplicationInfo(): GroupApplicationInfo {
@@ -1068,19 +1222,20 @@ internal class ImApiService(
         return resp.moments
     }
 
-    suspend fun likeMoment(momentID: String, ownerUserID: String? = null) {
-        httpClient.chatPostVoid(
+    suspend fun likeMoment(momentID: String, ownerUserID: String? = null): MomentLike =
+        httpClient.chatPostEnvelope(
             ChatApiRoutes.MOMENT_LIKE,
             MomentLikeReq(momentID = momentID, ownerUserID = ownerUserID),
         )
-    }
 
-    suspend fun commentMoment(momentID: String, content: String, ownerUserID: String? = null) {
-        httpClient.chatPostVoid(
-            ChatApiRoutes.MOMENT_COMMENT,
-            MomentCommentReq(momentID = momentID, content = content, ownerUserID = ownerUserID),
-        )
-    }
+    suspend fun commentMoment(
+        momentID: String,
+        content: String,
+        ownerUserID: String? = null,
+    ): MomentComment = httpClient.chatPostEnvelope(
+        ChatApiRoutes.MOMENT_COMMENT,
+        MomentCommentReq(momentID = momentID, content = content, ownerUserID = ownerUserID),
+    )
 
     suspend fun deleteMoment(momentID: String) {
         httpClient.chatPostVoid(ChatApiRoutes.MOMENT_DELETE, MomentDeleteReq(momentID = momentID))
@@ -1241,4 +1396,341 @@ internal class ImApiService(
 
     suspend fun completeMultipartUpload(req: CompleteMultipartUploadReq): CompleteMultipartUploadResp =
         httpClient.imPostEnvelope(ImApiRoutes.OBJECT_COMPLETE_MULTIPART_UPLOAD, req)
+
+    suspend fun revokeMsg(userID: String, conversationID: String, seq: Long) {
+        httpClient.imPostVoid(
+            ImApiRoutes.REVOKE_MSG,
+            RevokeMsgReq(userID = userID, conversationID = conversationID, seq = seq),
+        )
+    }
+
+    suspend fun deleteMsgs(userID: String, conversationID: String, seqs: List<Long>) {
+        httpClient.imPostVoid(
+            ImApiRoutes.DELETE_MSG,
+            DeleteMsgsReq(userID = userID, conversationID = conversationID, seqs = seqs),
+        )
+    }
+
+    suspend fun markMsgsAsRead(userID: String, conversationID: String, seqs: List<Long>) {
+        httpClient.imPostVoid(
+            ImApiRoutes.MARK_MSG_READ,
+            MarkMsgsAsReadReq(userID = userID, conversationID = conversationID, seqs = seqs),
+        )
+    }
+
+    suspend fun searchMsg(req: SearchMsgReq): SearchMsgResp =
+        httpClient.imPostEnvelope(ImApiRoutes.SEARCH_MSG, req)
+
+    suspend fun clearAllMsg(userID: String) {
+        httpClient.imPostVoid(ImApiRoutes.CLEAR_ALL_MSG, ClearAllMsgReq(userID))
+    }
+
+    suspend fun joinGroup(
+        groupID: String,
+        reqMessage: String = "",
+        joinSource: Int = 3,
+        inviterUserID: String = "",
+        ex: String = "",
+    ) {
+        httpClient.imPostVoid(
+            ImApiRoutes.JOIN_GROUP,
+            JoinGroupReq(
+                groupID = groupID,
+                reqMessage = reqMessage,
+                joinSource = joinSource,
+                inviterUserID = inviterUserID,
+                ex = ex,
+            ),
+        )
+    }
+
+    suspend fun groupApplicationResponse(
+        groupID: String,
+        fromUserID: String,
+        handledMsg: String,
+        handleResult: Int,
+    ) {
+        httpClient.imPostVoid(
+            ImApiRoutes.GROUP_APPLICATION_RESPONSE,
+            GroupApplicationResponseReq(
+                groupID = groupID,
+                fromUserID = fromUserID,
+                handledMsg = handledMsg,
+                handleResult = handleResult,
+            ),
+        )
+    }
+
+    suspend fun getGroupApplicationUnhandledCount(userID: String, time: Long = 0): Int {
+        val resp: GetGroupApplicationUnhandledCountResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_GROUP_APPLICATION_UNHANDLED_COUNT,
+            GetGroupApplicationUnhandledCountReq(userID = userID, time = time),
+        )
+        return resp.count
+    }
+
+    suspend fun sendRedPacket(req: SendRedPacketRequest): String {
+        val resp: SendRedPacketResp = httpClient.chatPostEnvelope(ChatApiRoutes.RED_PACKET_SEND, req)
+        return resp.packetID
+    }
+
+    suspend fun grabRedPacket(packetID: String): Double {
+        val resp: GrabRedPacketResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.RED_PACKET_GRAB,
+            mapOf("packetID" to packetID),
+        )
+        return resp.amount
+    }
+
+    suspend fun getRedPacketDetail(packetID: String): RedPacketDetail =
+        httpClient.chatPostEnvelope(
+            ChatApiRoutes.RED_PACKET_DETAIL,
+            mapOf("packetID" to packetID),
+        )
+
+    suspend fun resetPaymentPassword(
+        verifyCode: String,
+        newPaymentPassword: String,
+        areaCode: String? = null,
+        phoneNumber: String? = null,
+        email: String? = null,
+    ) {
+        httpClient.chatPostVoid(
+            ChatApiRoutes.PAYMENT_PASSWORD_RESET,
+            ResetPaymentPasswordReq(
+                areaCode = areaCode,
+                phoneNumber = phoneNumber,
+                email = email,
+                verifyCode = verifyCode,
+                newPaymentPassword = newPaymentPassword,
+            ),
+        )
+    }
+
+    suspend fun updateFcmToken(
+        account: String,
+        fcmToken: String,
+        expireTime: Long = 0,
+    ) {
+        httpClient.imPostVoid(
+            ImApiRoutes.FCM_UPDATE_TOKEN,
+            FcmUpdateTokenReq(
+                platformID = currentPlatform().value.toString(),
+                fcmToken = fcmToken,
+                account = account,
+                expireTime = expireTime,
+            ),
+        )
+    }
+
+    suspend fun forceLogout(userID: String, platformID: Int = currentPlatform().value) {
+        httpClient.imPostVoid(
+            ImApiRoutes.FORCE_LOGOUT,
+            ForceLogoutReq(platformID = platformID, userID = userID),
+        )
+    }
+
+    suspend fun getDesignatedFriends(ownerUserID: String, friendUserIDs: List<String>): List<FriendInfo> {
+        if (friendUserIDs.isEmpty()) return emptyList()
+        val resp: GetFriendListResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_DESIGNATED_FRIENDS,
+            mapOf("ownerUserID" to ownerUserID, "friendUserIDs" to friendUserIDs),
+        )
+        return resp.friendsInfo.map { it.toFriendInfo(ownerUserID) }
+    }
+
+    suspend fun getRecvFriendApplications(
+        userID: String,
+        pageNumber: Int = 1,
+        pageSize: Int = 100,
+    ): List<FriendApplicationInfo> {
+        val resp: GetFriendApplicationsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_FRIEND_APPLICATIONS,
+            UserPaginationReq(userID, Pagination(pageNumber, pageSize)),
+        )
+        return resp.friendRequests
+    }
+
+    suspend fun getSelfFriendApplications(
+        userID: String,
+        pageNumber: Int = 1,
+        pageSize: Int = 100,
+    ): List<FriendApplicationInfo> {
+        val resp: GetFriendApplicationsResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_SELF_FRIEND_APPLICATIONS,
+            UserPaginationReq(userID, Pagination(pageNumber, pageSize)),
+        )
+        return resp.friendRequests
+    }
+
+    suspend fun getSelfUnhandledApplyCount(userID: String, time: Long = 0): Int {
+        val resp: GetGroupApplicationUnhandledCountResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_SELF_UNHANDLED_APPLY_COUNT,
+            mapOf("userID" to userID, "time" to time),
+        )
+        return resp.count
+    }
+
+    suspend fun updateFriends(ownerUserID: String, friendUserIDs: List<String>, remark: String? = null) {
+        val body = buildMap {
+            put("ownerUserID", ownerUserID)
+            put("friendUserIDs", friendUserIDs)
+            remark?.let { put("remark", it) }
+        }
+        httpClient.imPostVoid(ImApiRoutes.UPDATE_FRIENDS, body)
+    }
+
+    suspend fun searchFriendInfo(keyword: String): List<FriendInfo> {
+        val resp: GetFriendListResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.SEARCH_FRIEND,
+            mapOf("keyword" to keyword),
+        )
+        return resp.friendsInfo.map { it.toFriendInfo("") }
+    }
+
+    suspend fun searchUserFullInfo(keyword: String): List<UserFullInfo> {
+        val resp: FindUserFullInfoResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.SEARCH_USER,
+            SearchUserReq(keyword),
+        )
+        return resp.users
+    }
+
+    suspend fun subscribeUsersStatus(userID: String, userIDs: List<String>, genre: Int = 1): List<UserStatusInfo> {
+        val resp: UserStatusListResp = httpClient.imPostEnvelope(
+            ImApiRoutes.SUBSCRIBE_USERS_STATUS,
+            mapOf("userID" to userID, "userIDs" to userIDs, "genre" to genre),
+        )
+        return resp.statusList
+    }
+
+    suspend fun getSubscribeUsersStatus(userID: String): List<UserStatusInfo> {
+        val resp: UserStatusListResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_SUBSCRIBE_USERS_STATUS,
+            mapOf("userID" to userID),
+        )
+        return resp.statusList
+    }
+
+    suspend fun getUserStatus(userID: String, userIDs: List<String>): List<UserStatusInfo> {
+        val resp: UserStatusListResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_USERS_STATUS,
+            mapOf("userID" to userID, "userIDs" to userIDs),
+        )
+        return resp.statusList
+    }
+
+    suspend fun getUserClientConfig(userID: String): Map<String, String> {
+        val resp: UserClientConfigResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_USER_CLIENT_CONFIG,
+            mapOf("userID" to userID),
+        )
+        return resp.config
+    }
+
+    suspend fun getGroupMembersInfo(groupID: String, userIDs: List<String>): List<GroupMemberInfo> {
+        if (userIDs.isEmpty()) return emptyList()
+        val resp: GetGroupMemberListResp = httpClient.imPostEnvelope(
+            ImApiRoutes.GET_GROUP_MEMBERS_INFO,
+            mapOf("groupID" to groupID, "userIDs" to userIDs),
+        )
+        return resp.members
+    }
+
+    suspend fun setGroupMemberInfo(groupID: String, userID: String, nickname: String? = null, faceURL: String? = null) {
+        val memberInfo = buildMap {
+            put("groupID", groupID)
+            put("userID", userID)
+            nickname?.let { put("nickname", it) }
+            faceURL?.let { put("faceURL", it) }
+        }
+        httpClient.imPostVoid(ImApiRoutes.SET_GROUP_MEMBER_INFO, mapOf("members" to listOf(memberInfo)))
+    }
+
+    suspend fun transferGroup(groupID: String, newOwnerUserID: String) {
+        httpClient.imPostVoid(
+            ImApiRoutes.TRANSFER_GROUP,
+            mapOf("groupID" to groupID, "newOwnerUserID" to newOwnerUserID),
+        )
+    }
+
+    suspend fun muteGroupMember(groupID: String, userID: String, mutedSeconds: Long) {
+        httpClient.imPostVoid(
+            ImApiRoutes.MUTE_GROUP_MEMBER,
+            mapOf("groupID" to groupID, "userID" to userID, "mutedSeconds" to mutedSeconds),
+        )
+    }
+
+    suspend fun cancelMuteGroupMember(groupID: String, userID: String) {
+        httpClient.imPostVoid(
+            ImApiRoutes.CANCEL_MUTE_GROUP_MEMBER,
+            mapOf("groupID" to groupID, "userID" to userID),
+        )
+    }
+
+    suspend fun muteGroup(groupID: String) {
+        httpClient.imPostVoid(ImApiRoutes.MUTE_GROUP, mapOf("groupID" to groupID))
+    }
+
+    suspend fun cancelMuteGroup(groupID: String) {
+        httpClient.imPostVoid(ImApiRoutes.CANCEL_MUTE_GROUP, mapOf("groupID" to groupID))
+    }
+
+    suspend fun fetchFavoriteListFromServer(pageNumber: Int = 1, showNumber: Int = 20): FavoriteListResponse {
+        val resp: FavoriteListResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.FAVORITE_LIST,
+            FavoriteListReq(pageNumber = pageNumber, showNumber = showNumber),
+        )
+        return FavoriteListResponse(total = resp.total, favorites = resp.favorites)
+    }
+
+    suspend fun removeFavoriteByTarget(targetType: String, targetID: String) {
+        httpClient.chatPostVoid(
+            ChatApiRoutes.FAVORITE_REMOVE,
+            mapOf("targetType" to targetType, "targetID" to targetID),
+        )
+    }
+
+    suspend fun createReport(
+        targetType: String,
+        targetID: String,
+        category: String,
+        description: String? = null,
+        messageID: String? = null,
+        evidenceUrls: List<String>? = null,
+    ): CreateReportResult = httpClient.chatPostEnvelope(
+        ChatApiRoutes.CREATE_REPORT,
+        buildMap {
+            put("targetType", targetType)
+            put("targetID", targetID)
+            put("category", category)
+            description?.let { put("description", it) }
+            messageID?.let { put("messageID", it) }
+            evidenceUrls?.let { put("evidenceUrls", it) }
+        },
+    )
+
+    suspend fun requestAppealCaptcha(): AppealCaptcha =
+        httpClient.adminPostEnvelope(AdminApiRoutes.APPEAL_CAPTCHA, emptyMap<String, String>())
+
+    suspend fun uploadAppealEvidence(
+        appealToken: String,
+        bytes: ByteArray,
+        fileName: String,
+    ): AppealUploadResult = httpClient.adminPostEnvelope(
+        AdminApiRoutes.APPEAL_UPLOAD,
+        mapOf(
+            "appealToken" to appealToken,
+            "fileName" to fileName,
+            "file" to kotlin.io.encoding.Base64.encode(bytes),
+        ),
+    )
+
+    suspend fun getLatestApplicationVersion(platform: String, currentVersion: String? = null): ApplicationVersionInfo? {
+        val resp: LatestAppVersionResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.LATEST_APPLICATION_VERSION,
+            mapOf("platform" to platform, "version" to currentVersion),
+        )
+        return resp.version
+    }
 }

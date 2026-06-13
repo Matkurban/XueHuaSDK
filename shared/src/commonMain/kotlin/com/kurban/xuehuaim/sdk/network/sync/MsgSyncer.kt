@@ -66,6 +66,13 @@ internal class MsgSyncer(
         eventEmitter.emitConversation(ConversationEvent.SyncFinished(visibleCount))
     }
 
+    suspend fun triggerWakeupSync() = withContext(ioDispatcher) {
+        if (userId.isEmpty()) return@withContext
+        log.info { "triggerWakeupSync" }
+        runCatching { doConnectedSync() }
+            .onFailure { e -> log.warn(e) { "wakeup sync failed" } }
+    }
+
     suspend fun handlePush(data: ByteArray) = withContext(ioDispatcher) {
         if (data.isEmpty()) return@withContext
         try {
@@ -137,6 +144,10 @@ internal class MsgSyncer(
         pullResp.msgs.forEach { (conversationId, msgList) ->
             msgList.msgs.forEach { wsMsg ->
                 val message = wsMsg.toMessage(conversationId)
+                if (message.contentType == MessageType.TYPING) {
+                    notificationDispatcher.dispatchTyping(message, conversationId)
+                    return@forEach
+                }
                 if (message.isNotification()) {
                     if (!bootstrapOnly) {
                         notificationDispatcher.dispatch(message)

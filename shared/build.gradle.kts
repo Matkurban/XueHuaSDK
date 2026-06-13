@@ -64,6 +64,7 @@ kotlin {
             kotlin.srcDir("src/databaseMain/kotlin")
             dependencies {
                 implementation(libs.sqldelight.coroutines.extensions)
+                implementation(libs.sqldelight.async.extensions)
             }
         }
 
@@ -113,12 +114,22 @@ kotlin {
             }
         }
         jsMain {
+            dependsOn(databaseMain)
             dependencies {
                 implementation(libs.ktor.client.js)
+                implementation(libs.sqldelight.web.worker.driver)
+                implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqldelight.get()))
+                implementation(npm("sql.js", "1.8.0"))
             }
         }
-        wasmJsMain.dependencies {
-            implementation(libs.ktor.client.core)
+        wasmJsMain {
+            dependsOn(databaseMain)
+            dependencies {
+                implementation(libs.ktor.client.core)
+                implementation(libs.sqldelight.web.worker.driver)
+                implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqldelight.get()))
+                implementation(npm("sql.js", "1.8.0"))
+            }
         }
     }
 }

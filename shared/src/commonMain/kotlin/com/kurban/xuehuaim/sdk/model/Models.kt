@@ -550,3 +550,117 @@ data class InputStatusChangedData(
     val userID: String,
     val platformIDs: List<Int> = emptyList(),
 )
+
+@Serializable
+data class UserStatusInfo(
+    val userID: String? = null,
+    val status: Int? = null,
+    val platformIDs: List<Int>? = null,
+)
+
+@Serializable
+data class FavoriteListResponse(
+    val total: Int = 0,
+    val favorites: List<FavoriteItem> = emptyList(),
+)
+
+@Serializable
+data class AppealCaptcha(
+    val captchaID: String,
+    val captchaImage: String? = null,
+)
+
+@Serializable
+data class AppealUploadResult(
+    val url: String,
+)
+
+@Serializable
+data class CreateReportResult(
+    val reportID: String? = null,
+)
+
+@Serializable
+data class AdvancedTextElem(
+    val text: String,
+    val messageEntityList: List<MessageEntity> = emptyList(),
+)
+
+@Serializable
+data class MessageEntity(
+    val type: String? = null,
+    val offset: Int = 0,
+    val length: Int = 0,
+    val url: String? = null,
+    val info: String? = null,
+)
+
+@Serializable
+data class SendRedPacketRequest(
+    val packetType: Int,
+    val totalAmount: Double,
+    val totalCount: Int,
+    val greeting: String,
+    val convID: String,
+    val targetUserID: String? = null,
+)
+
+@Serializable
+data class RedPacketGrabInfo(
+    val grabberID: String,
+    val nickname: String = "",
+    @SerialName("faceURL") val faceURL: String = "",
+    val amount: Double,
+    val createTime: Long,
+)
+
+@Serializable
+data class RedPacketDetail(
+    val packetID: String,
+    val senderID: String,
+    val senderNickname: String = "",
+    @SerialName("senderFaceURL") val senderFaceURL: String = "",
+    val packetType: Int,
+    val totalAmount: Double,
+    val totalCount: Int,
+    val grabbedAmount: Double,
+    val grabbedCount: Int,
+    val status: Int,
+    val greeting: String,
+    val expireAt: Long,
+    val grabs: List<RedPacketGrabInfo> = emptyList(),
+    val myGrabAmount: Double = 0.0,
+)
+
+@Serializable
+data class SearchParams(
+    val conversationID: String? = null,
+    val clientMsgIDList: List<String>? = null,
+)
+
+@Serializable
+data class AdvancedMessage(
+    val messageList: List<Message>? = null,
+    val isEnd: Boolean? = null,
+    val errCode: Int? = null,
+    val errMsg: String? = null,
+    val lastMinSeq: Long? = null,
+)
+
+@Serializable
+data class SpaceInfo(
+    val spaceName: String,
+)
+
+@Serializable
+data class RevokedInfo(
+    val revokerID: String? = null,
+    val revokerRole: GroupRoleLevel? = null,
+    val revokerNickname: String? = null,
+    val clientMsgID: String? = null,
+    val revokeTime: Long? = null,
+    val sourceMessageSendTime: Long? = null,
+    val sourceMessageSendID: String? = null,
+    val sourceMessageSenderNickname: String? = null,
+    val sessionType: ConversationType? = null,
+)

@@ -23,8 +23,13 @@ import com.kurban.xuehuaim.sdk.event.UserEvent
 import com.kurban.xuehuaim.sdk.exception.XueHuaException
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
 import com.kurban.xuehuaim.sdk.model.AuthCacheData
+import com.kurban.xuehuaim.sdk.model.SpaceInfo
 import com.kurban.xuehuaim.sdk.model.UploadFileResult
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.util.CacheKey
+import com.kurban.xuehuaim.sdk.util.OpenImUtils
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginReq
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdHolder
@@ -95,7 +100,7 @@ class IMManager internal constructor(
     private val loginUserId: () -> String? = { authData?.userID }
 
     val conversationManager =
-        ConversationManager(apiService, databaseService, eventEmitter, loginUserId)
+        ConversationManager(apiService, databaseService, webSocketService, eventEmitter, loginUserId)
     val friendshipManager = FriendshipManager(apiService, eventEmitter, loginUserId)
     val messageManager = MessageManager(
         apiService,
@@ -105,14 +110,16 @@ class IMManager internal constructor(
         notificationDispatcher,
         eventEmitter,
         loginUserId,
-    )
+        fileUploadService,
+        fileSystem,
+    ).also { it.bindConversationManager(conversationManager) }
     val groupManager = GroupManager(apiService, eventEmitter, loginUserId)
     val userManager = UserManager(apiService, databaseService, eventEmitter, loginUserId)
     val momentsManager = MomentsManager(apiService, eventEmitter, loginUserId)
     val favoriteManager = FavoriteManager(apiService, eventEmitter)
     val callManager = CallManager(apiService, messageManager, eventEmitter)
 
-    val redPacketManager = RedPacketManager(apiService, eventEmitter)
+    val redPacketManager = RedPacketManager(apiService, databaseService, eventEmitter)
     val reportAppealManager = ReportAppealManager(apiService)
     val applicationManager = ApplicationManager(apiService)
 
@@ -151,6 +158,7 @@ class IMManager internal constructor(
         loginUserIdHolder.userId = userId
         callManager.setCurrentUserId(userId)
         databaseService.switchSpace(userId)
+        persistAuthCache(authData!!)
         msgSyncer.bindUser(userId)
         msgSyncer.bindCallManager(callManager)
         val users = userManager.getUsersInfo(listOf(userId))
@@ -269,6 +277,9 @@ class IMManager internal constructor(
         loginUserIdHolder.userId = null
         httpClient.setImToken("")
         httpClient.setChatToken("")
+        runCatching {
+            databaseService.removeValue(CacheKey.LOGIN_AUTH_DATA, isGlobal = true)
+        }
         eventEmitter.setLoginStatus(LoginStatus.LOGOUT)
         eventEmitter.setConnectionState(ConnectionState.DISCONNECTED)
     }
@@ -291,6 +302,108 @@ class IMManager internal constructor(
     fun getLoginUserId(): String? = authData?.userID
 
     fun getAuthCacheData(): AuthCacheData? = authData
+
+    suspend fun loadLoginConfig(): LoginStatus = withContext(ioDispatcher) {
+        ensureInitialized()
+        val cached = databaseService.getValue(CacheKey.LOGIN_AUTH_DATA, isGlobal = true)
+        if (cached.isNullOrBlank()) {
+            return@withContext loginStatus.value
+        }
+        return@withContext try {
+            val data = Json.decodeFromString<AuthCacheData>(cached)
+            when (checkToken(data.imToken)) {
+                TokenCheckResult.Valid -> {
+                    loginWithCachedAuth(data)
+                    LoginStatus.LOGGED
+                }
+                else -> {
+                    eventEmitter.setLoginStatus(LoginStatus.LOGOUT)
+                    LoginStatus.LOGOUT
+                }
+            }
+        } catch (e: Exception) {
+            log.warn(e) { "loadLoginConfig failed" }
+            LoginStatus.LOGOUT
+        }
+    }
+
+    suspend fun unInitSDK() = withContext(ioDispatcher) {
+        if (!initialized) return@withContext
+        runCatching { logout() }
+        initialized = false
+        initConfig = null
+    }
+
+    suspend fun getValue(key: String, isGlobal: Boolean = false): String? =
+        withContext(ioDispatcher) {
+            ensureInitialized()
+            databaseService.getValue(key, isGlobal)
+        }
+
+    suspend fun setValue(key: String, value: String?, isGlobal: Boolean = false): Boolean =
+        withContext(ioDispatcher) {
+            ensureInitialized()
+            databaseService.setValue(key, value, isGlobal)
+        }
+
+    suspend fun removeValue(key: String, isGlobal: Boolean = false): Boolean =
+        withContext(ioDispatcher) {
+            ensureInitialized()
+            databaseService.removeValue(key, isGlobal)
+        }
+
+    suspend fun getSpaceInfo(): SpaceInfo = withContext(ioDispatcher) {
+        ensureInitialized()
+        val userId = authData?.userID ?: "guest"
+        SpaceInfo(spaceName = OpenImUtils.generateSpaceName(userId))
+    }
+
+    suspend fun <R> runInDatabase(block: suspend (DatabaseService) -> R): R =
+        withContext(ioDispatcher) {
+            ensureInitialized()
+            block(databaseService)
+        }
+
+    suspend fun triggerWakeupSync() = withContext(ioDispatcher) {
+        ensureLoggedIn()
+        msgSyncer.triggerWakeupSync()
+    }
+
+    suspend fun networkStatusChanged() = withContext(ioDispatcher) {
+        ensureInitialized()
+        if (loginStatus.value == LoginStatus.LOGGED &&
+            eventEmitter.connectionState.value != ConnectionState.CONNECTED
+        ) {
+            authData?.let { webSocketService.connect(it.userID, it.imToken) }
+        }
+    }
+
+    suspend fun updateFcmToken(fcmToken: String, expireTime: Long = 0) = withContext(ioDispatcher) {
+        ensureLoggedIn()
+        val userId = authData?.userID ?: return@withContext
+        runCatching {
+            apiService.updateFcmToken(userId, fcmToken, expireTime)
+            eventEmitter.emitService(
+                ServiceEvent.BackgroundPush(
+                    """{"type":"fcm_token_updated","userID":"$userId"}""",
+                ),
+            )
+        }
+    }
+
+    suspend fun getLoginUserInfo(): UserInfo? = withContext(ioDispatcher) {
+        val userId = authData?.userID ?: return@withContext null
+        userManager.getUsersInfo(listOf(userId)).firstOrNull()
+            ?: UserInfo(userID = userId)
+    }
+
+    private suspend fun persistAuthCache(data: AuthCacheData) {
+        databaseService.setValue(
+            CacheKey.LOGIN_AUTH_DATA,
+            Json.encodeToString(data),
+            isGlobal = true,
+        )
+    }
 
     private fun ensureInitialized() {
         if (!initialized) {

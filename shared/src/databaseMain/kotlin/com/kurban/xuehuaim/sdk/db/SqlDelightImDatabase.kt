@@ -1,5 +1,6 @@
 package com.kurban.xuehuaim.sdk.db
 
+import app.cash.sqldelight.db.SqlDriver
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.model.UserInfo
@@ -8,12 +9,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 internal class SqlDelightImDatabase(
+    private val driver: SqlDriver,
     database: OpenIMDatabase,
 ) : ImDatabase {
     private val queries = database.openIMDatabaseQueries
     private val json = Json { ignoreUnknownKeys = true }
 
-    override suspend fun switchSpace(userId: String) = withContext(ioDispatcher) { }
+    override suspend fun close() = withContext(ioDispatcher) {
+        driver.close()
+    }
 
     override suspend fun insertOrReplaceUser(user: UserInfo) = withContext(ioDispatcher) {
         queries.insertOrReplaceUser(
@@ -134,70 +138,15 @@ internal class SqlDelightImDatabase(
         }
 
     override suspend fun insertOrReplaceMessage(message: Message) = withContext(ioDispatcher) {
-        queries.insertOrReplaceChatLog(
-            Local_chat_logs(
-                clientMsgID = message.clientMsgID,
-                serverMsgID = message.serverMsgID,
-                sendID = message.sendID,
-                recvID = message.recvID,
-                senderPlatformID = message.platformID?.toLong(),
-                senderNickname = message.senderNickname,
-                senderFaceUrl = message.senderFaceUrl,
-                groupID = message.groupID,
-                sessionType = message.sessionType?.value?.toLong(),
-                msgFrom = message.msgFrom?.toLong(),
-                contentType = message.contentType?.value?.toLong(),
-                content = message.content,
-                isRead = if (message.isRead == true) 1L else 0L,
-                status = message.status?.value?.toLong(),
-                seq = message.seq,
-                sendTime = message.sendTime,
-                createTime = message.createTime,
-                attachedInfo = message.attachedInfo,
-                ex = message.ex,
-                localEx = message.localEx,
-                isReact = 0L,
-                isExternalExtensions = 0L,
-                hasReadTime = null,
-                conversationID = message.conversationID,
-            ),
-        )
+        queries.insertOrReplaceChatLog(message.toChatLogRow())
         Unit
     }
 
     override suspend fun getMessages(conversationId: String, count: Long): List<Message> =
         withContext(ioDispatcher) {
-            queries.selectMessagesByConversation(conversationId, count).executeAsList().map { row ->
-                Message(
-                    clientMsgID = row.clientMsgID,
-                    serverMsgID = row.serverMsgID,
-                    sendID = row.sendID,
-                    recvID = row.recvID,
-                    platformID = row.senderPlatformID?.toInt(),
-                    senderNickname = row.senderNickname,
-                    senderFaceUrl = row.senderFaceUrl,
-                    groupID = row.groupID,
-                    sessionType = row.sessionType?.toInt()?.let { v ->
-                        com.kurban.xuehuaim.sdk.enum.ConversationType.entries.find { it.value == v }
-                    },
-                    msgFrom = row.msgFrom?.toInt(),
-                    contentType = row.contentType?.toInt()?.let { v ->
-                        com.kurban.xuehuaim.sdk.enum.MessageType.entries.find { it.value == v }
-                    },
-                    content = row.content,
-                    isRead = row.isRead == 1L,
-                    status = row.status?.toInt()?.let { v ->
-                        com.kurban.xuehuaim.sdk.enum.MessageStatus.entries.find { it.value == v }
-                    },
-                    seq = row.seq,
-                    sendTime = row.sendTime,
-                    createTime = row.createTime,
-                    attachedInfo = row.attachedInfo,
-                    ex = row.ex,
-                    localEx = row.localEx,
-                    conversationID = row.conversationID,
-                )
-            }
+            queries.selectMessagesByConversation(conversationId, count)
+                .executeAsList()
+                .map(MessageDbMapper::fromRow)
         }
 
     override suspend fun deleteMessage(clientMsgId: String) = withContext(ioDispatcher) {
@@ -240,4 +189,127 @@ internal class SqlDelightImDatabase(
             queries.deleteVersionSync(tableName, entityId)
             Unit
         }
+
+    override suspend fun insertOrReplaceGrabbedRedPacket(packetId: String, grabTime: Long) =
+        withContext(ioDispatcher) {
+            queries.insertOrReplaceGrabbedRedPacket(
+                Local_grabbed_red_packets(packetID = packetId, grabTime = grabTime),
+            )
+            Unit
+        }
+
+    override suspend fun selectGrabbedRedPacket(packetId: String): Long? =
+        withContext(ioDispatcher) {
+            queries.selectGrabbedRedPacket(packetId).executeAsOneOrNull()
+        }
+
+    override suspend fun selectGrabbedRedPacketIds(packetIds: List<String>): List<String> =
+        withContext(ioDispatcher) {
+            if (packetIds.isEmpty()) return@withContext emptyList()
+            queries.selectGrabbedRedPacketIds(packetIds).executeAsList()
+        }
+
+    override suspend fun insertOrReplaceKv(key: String, value: String?, isGlobal: Boolean) =
+        withContext(ioDispatcher) {
+            queries.insertOrReplaceKv(
+                Local_kv_store(
+                    key = key,
+                    value_ = value,
+                    isGlobal = if (isGlobal) 1L else 0L,
+                ),
+            )
+            Unit
+        }
+
+    override suspend fun selectKv(key: String, isGlobal: Boolean): String? =
+        withContext(ioDispatcher) {
+            queries.selectKv(key, if (isGlobal) 1L else 0L).executeAsOneOrNull()?.value_
+        }
+
+    override suspend fun deleteKv(key: String, isGlobal: Boolean) = withContext(ioDispatcher) {
+        queries.deleteKv(key, if (isGlobal) 1L else 0L)
+        Unit
+    }
+
+    override suspend fun selectMessageByClientMsgId(clientMsgId: String): Message? =
+        withContext(ioDispatcher) {
+            queries.selectMessageByClientMsgId(clientMsgId).executeAsOneOrNull()
+                ?.let(MessageDbMapper::fromRow)
+        }
+
+    override suspend fun updateChatLogContent(clientMsgId: String, content: String) =
+        withContext(ioDispatcher) {
+            queries.updateChatLogContent(content, clientMsgId)
+            Unit
+        }
+
+    override suspend fun updateMessageContentType(clientMsgId: String, contentType: Int) =
+        withContext(ioDispatcher) {
+            queries.updateChatLogContentType(contentType.toLong(), clientMsgId)
+            Unit
+        }
+
+    override suspend fun updateMessageLocalEx(clientMsgId: String, localEx: String) =
+        withContext(ioDispatcher) {
+            val row = queries.selectMessageByClientMsgId(clientMsgId).executeAsOneOrNull()
+                ?: return@withContext
+            queries.insertOrReplaceChatLog(row.copy(localEx = localEx))
+            Unit
+        }
+
+    override suspend fun markMessageAsRead(clientMsgId: String) = withContext(ioDispatcher) {
+        queries.updateChatLogRead(clientMsgId)
+        Unit
+    }
+
+    override suspend fun selectAllMessages(): List<Message> = withContext(ioDispatcher) {
+        queries.selectAllMessages().executeAsList().map(MessageDbMapper::fromRow)
+    }
+
+    override suspend fun selectSendingMessages(): List<SendingMessage> = withContext(ioDispatcher) {
+        queries.selectSendingMessages().executeAsList().map { row ->
+            SendingMessage(
+                clientMsgID = row.clientMsgID,
+                conversationID = row.conversationID,
+                ex = row.ex,
+            )
+        }
+    }
+
+    override suspend fun deleteAllChatLogs() = withContext(ioDispatcher) {
+        queries.deleteAllChatLogs()
+        Unit
+    }
+
+    override suspend fun hideAllConversations() = withContext(ioDispatcher) {
+        queries.hideAllConversations()
+        Unit
+    }
+
+    private fun Message.toChatLogRow(): Local_chat_logs = Local_chat_logs(
+        clientMsgID = clientMsgID,
+        serverMsgID = serverMsgID,
+        sendID = sendID,
+        recvID = recvID,
+        senderPlatformID = platformID?.toLong(),
+        senderNickname = senderNickname,
+        senderFaceUrl = senderFaceUrl,
+        groupID = groupID,
+        sessionType = sessionType?.value?.toLong(),
+        msgFrom = msgFrom?.toLong(),
+        contentType = contentType?.value?.toLong(),
+        content = content,
+        isRead = if (isRead == true) 1L else 0L,
+        status = status?.value?.toLong(),
+        seq = seq,
+        sendTime = sendTime,
+        createTime = createTime,
+        attachedInfo = attachedInfo,
+        ex = ex,
+        localEx = localEx,
+        isReact = 0L,
+        isExternalExtensions = 0L,
+        hasReadTime = null,
+        conversationID = conversationID,
+    )
 }

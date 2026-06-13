@@ -56,6 +56,8 @@ actual class DatabaseDriverFactory {
             context = SdkAndroidContext.applicationContext,
             name = dbPath.substringAfterLast('/'),
         )
+
+    actual suspend fun initializeSchema(driver: SqlDriver) = Unit
 }
 
 actual fun createGzipCodec(): GzipCodec = GzipCodec()

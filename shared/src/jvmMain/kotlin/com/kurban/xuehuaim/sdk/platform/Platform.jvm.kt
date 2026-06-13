@@ -54,11 +54,11 @@ actual class DatabaseDriverFactory {
     actual fun createDriver(dbPath: String): SqlDriver {
         val file = File(dbPath)
         file.parentFile?.mkdirs()
-        val driver = JdbcSqliteDriver("jdbc:sqlite:${file.absolutePath}")
-        if (!file.exists() || file.length() == 0L) {
-            OpenIMDatabase.Schema.create(driver)
-        }
-        return driver
+        return JdbcSqliteDriver("jdbc:sqlite:${file.absolutePath}")
+    }
+
+    actual suspend fun initializeSchema(driver: SqlDriver) {
+        OpenIMDatabase.Schema.create(driver)
     }
 }
 

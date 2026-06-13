@@ -14,15 +14,11 @@ internal class InMemoryImDatabase : ImDatabase {
     private val conversations = mutableListOf<ConversationInfo>()
     private val messages = mutableListOf<Message>()
     private val versionSync = mutableMapOf<String, VersionSyncInfo>()
+    private val grabbedRedPackets = mutableMapOf<String, Long>()
+    private val kvStore = mutableMapOf<Pair<String, Boolean>, String?>()
+    private val sendingMessages = mutableListOf<SendingMessage>()
 
-    override suspend fun switchSpace(userId: String) = withContext(ioDispatcher) {
-        mutex.withLock {
-            users.clear()
-            conversations.clear()
-            messages.clear()
-            versionSync.clear()
-        }
-    }
+    override suspend fun close() = Unit
 
     override suspend fun insertOrReplaceUser(user: UserInfo) = withContext(ioDispatcher) {
         mutex.withLock {
@@ -176,4 +172,114 @@ internal class InMemoryImDatabase : ImDatabase {
                 Unit
             }
         }
+
+    override suspend fun insertOrReplaceGrabbedRedPacket(packetId: String, grabTime: Long) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                grabbedRedPackets[packetId] = grabTime
+                Unit
+            }
+        }
+
+    override suspend fun selectGrabbedRedPacket(packetId: String): Long? = withContext(ioDispatcher) {
+        mutex.withLock { grabbedRedPackets[packetId] }
+    }
+
+    override suspend fun selectGrabbedRedPacketIds(packetIds: List<String>): List<String> =
+        withContext(ioDispatcher) {
+            mutex.withLock { packetIds.filter { grabbedRedPackets.containsKey(it) } }
+        }
+
+    override suspend fun insertOrReplaceKv(key: String, value: String?, isGlobal: Boolean) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                kvStore[key to isGlobal] = value
+                Unit
+            }
+        }
+
+    override suspend fun selectKv(key: String, isGlobal: Boolean): String? =
+        withContext(ioDispatcher) {
+            mutex.withLock { kvStore[key to isGlobal] }
+        }
+
+    override suspend fun deleteKv(key: String, isGlobal: Boolean) = withContext(ioDispatcher) {
+        mutex.withLock {
+            kvStore.remove(key to isGlobal)
+            Unit
+        }
+    }
+
+    override suspend fun selectMessageByClientMsgId(clientMsgId: String): Message? =
+        withContext(ioDispatcher) {
+            mutex.withLock { messages.find { it.clientMsgID == clientMsgId } }
+        }
+
+    override suspend fun updateChatLogContent(clientMsgId: String, content: String) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                val index = messages.indexOfFirst { it.clientMsgID == clientMsgId }
+                if (index >= 0) {
+                    messages[index] = messages[index].copy(content = content)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun updateMessageContentType(clientMsgId: String, contentType: Int) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                val index = messages.indexOfFirst { it.clientMsgID == clientMsgId }
+                if (index >= 0) {
+                    val type = com.kurban.xuehuaim.sdk.enum.MessageType.fromValue(contentType)
+                    messages[index] = messages[index].copy(contentType = type)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun updateMessageLocalEx(clientMsgId: String, localEx: String) =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                val index = messages.indexOfFirst { it.clientMsgID == clientMsgId }
+                if (index >= 0) {
+                    messages[index] = messages[index].copy(localEx = localEx)
+                }
+                Unit
+            }
+        }
+
+    override suspend fun markMessageAsRead(clientMsgId: String) = withContext(ioDispatcher) {
+        mutex.withLock {
+            val index = messages.indexOfFirst { it.clientMsgID == clientMsgId }
+            if (index >= 0) {
+                messages[index] = messages[index].copy(isRead = true)
+            }
+            Unit
+        }
+    }
+
+    override suspend fun selectAllMessages(): List<Message> = withContext(ioDispatcher) {
+        mutex.withLock { messages.sortedByDescending { it.sendTime ?: 0 }.toList() }
+    }
+
+    override suspend fun selectSendingMessages(): List<SendingMessage> = withContext(ioDispatcher) {
+        mutex.withLock { sendingMessages.toList() }
+    }
+
+    override suspend fun deleteAllChatLogs() = withContext(ioDispatcher) {
+        mutex.withLock {
+            messages.clear()
+            Unit
+        }
+    }
+
+    override suspend fun hideAllConversations() = withContext(ioDispatcher) {
+        mutex.withLock {
+            conversations.indices.forEach { index ->
+                conversations[index] = conversations[index].copy(latestMsgSendTime = 0)
+            }
+            Unit
+        }
+    }
 }

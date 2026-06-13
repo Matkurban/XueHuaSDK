@@ -2,10 +2,12 @@ package com.kurban.xuehuaim.sdk.db
 
 import com.kurban.xuehuaim.sdk.platform.DatabaseDriverFactory
 
-internal actual fun createImDatabase(
+internal actual suspend fun createImDatabase(
     driverFactory: DatabaseDriverFactory,
-    dbPath: String
+    dbPath: String,
 ): ImDatabase {
-    val database = OpenIMDatabase(driverFactory.createDriver(dbPath))
-    return SqlDelightImDatabase(database)
+    val driver = driverFactory.createDriver(dbPath)
+    driverFactory.initializeSchema(driver)
+    val database = OpenIMDatabase(driver)
+    return SqlDelightImDatabase(driver, database)
 }

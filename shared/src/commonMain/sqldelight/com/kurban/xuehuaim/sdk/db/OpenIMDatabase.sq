@@ -234,6 +234,13 @@ CREATE TABLE local_grabbed_red_packets (
     grabTime INTEGER NOT NULL
 );
 
+CREATE TABLE local_kv_store (
+    key TEXT NOT NULL,
+    value TEXT,
+    isGlobal INTEGER NOT NULL,
+    PRIMARY KEY (key, isGlobal)
+);
+
 -- Users
 selectAllUsers:
 SELECT * FROM local_users;
@@ -296,3 +303,48 @@ INSERT OR REPLACE INTO local_version_sync VALUES ?;
 
 deleteVersionSync:
 DELETE FROM local_version_sync WHERE tableName = ? AND entityID = ?;
+
+-- Grabbed red packets
+insertOrReplaceGrabbedRedPacket:
+INSERT OR REPLACE INTO local_grabbed_red_packets VALUES ?;
+
+selectGrabbedRedPacket:
+SELECT grabTime FROM local_grabbed_red_packets WHERE packetID = ? LIMIT 1;
+
+selectGrabbedRedPacketIds:
+SELECT packetID FROM local_grabbed_red_packets WHERE packetID IN ?;
+
+-- KV store
+insertOrReplaceKv:
+INSERT OR REPLACE INTO local_kv_store VALUES ?;
+
+selectKv:
+SELECT value FROM local_kv_store WHERE key = ? AND isGlobal = ? LIMIT 1;
+
+deleteKv:
+DELETE FROM local_kv_store WHERE key = ? AND isGlobal = ?;
+
+-- Chat log extras
+selectMessageByClientMsgId:
+SELECT * FROM local_chat_logs WHERE clientMsgID = ? LIMIT 1;
+
+updateChatLogContent:
+UPDATE local_chat_logs SET content = ? WHERE clientMsgID = ?;
+
+updateChatLogContentType:
+UPDATE local_chat_logs SET contentType = ? WHERE clientMsgID = ?;
+
+updateChatLogRead:
+UPDATE local_chat_logs SET isRead = 1 WHERE clientMsgID = ?;
+
+selectAllMessages:
+SELECT * FROM local_chat_logs ORDER BY sendTime DESC;
+
+selectSendingMessages:
+SELECT * FROM local_sending_messages;
+
+deleteAllChatLogs:
+DELETE FROM local_chat_logs;
+
+hideAllConversations:
+UPDATE local_conversations SET latestMsgSendTime = 0;

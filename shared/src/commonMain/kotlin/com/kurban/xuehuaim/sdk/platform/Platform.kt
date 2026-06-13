@@ -32,6 +32,7 @@ expect class FileSystem {
 
 expect class DatabaseDriverFactory {
     fun createDriver(dbPath: String): app.cash.sqldelight.db.SqlDriver
+    suspend fun initializeSchema(driver: app.cash.sqldelight.db.SqlDriver)
 }
 
 expect fun createGzipCodec(): GzipCodec

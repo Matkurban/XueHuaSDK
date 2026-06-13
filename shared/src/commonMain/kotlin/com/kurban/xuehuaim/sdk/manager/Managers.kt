@@ -33,13 +33,17 @@ import com.kurban.xuehuaim.sdk.model.PictureElem
 import com.kurban.xuehuaim.sdk.model.PictureInfo
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
 import com.kurban.xuehuaim.sdk.model.QuoteElem
+import com.kurban.xuehuaim.sdk.model.RedPacketDetail
 import com.kurban.xuehuaim.sdk.model.RedPacketInfo
+import com.kurban.xuehuaim.sdk.model.SearchParams
+import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.ReportInfo
 import com.kurban.xuehuaim.sdk.model.SearchResult
 import com.kurban.xuehuaim.sdk.model.SoundElem
 import com.kurban.xuehuaim.sdk.model.TextElem
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
+import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.model.VideoElem
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.http.LoginUserIdProvider
@@ -52,10 +56,12 @@ import com.kurban.xuehuaim.sdk.network.ws.WebSocketService
 import com.kurban.xuehuaim.sdk.network.ws.WsIdentifier
 import com.kurban.xuehuaim.sdk.network.ws.WsRequest
 import com.kurban.xuehuaim.sdk.platform.currentPlatform
+import com.kurban.xuehuaim.sdk.platform.FileSystem
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.sync.MessageDisplayEnricher
 import com.kurban.xuehuaim.sdk.util.ClientMsgIdGenerator
 import com.kurban.xuehuaim.sdk.util.ConversationMessageUpdater
+import com.kurban.xuehuaim.sdk.util.OpenImUtils
 import com.kurban.xuehuaim.sdk.util.md5Hex
 import com.kurban.xuehuaim.sdk.util.withParsedContent
 import kotlinx.coroutines.CoroutineScope
@@ -77,8 +83,15 @@ class MessageManager internal constructor(
     private val notificationDispatcher: NotificationDispatcher,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: LoginUserIdProvider,
+    private val fileUploadService: FileUploadService,
+    private val fileSystem: FileSystem,
 ) {
+    private var conversationManager: ConversationManager? = null
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+
+    internal fun bindConversationManager(manager: ConversationManager) {
+        conversationManager = manager
+    }
 
     suspend fun createTextMessage(text: String): Message = Message(
         clientMsgID = ClientMsgIdGenerator.generate(),
@@ -228,6 +241,42 @@ class MessageManager internal constructor(
         )
     }
 
+    suspend fun createCustomMessage(
+        data: String,
+        extension: String = "",
+        description: String = "",
+    ): Message {
+        val elem = CustomElem(data = data, extension = extension, description = description)
+        return Message(
+            clientMsgID = ClientMsgIdGenerator.generate(),
+            contentType = MessageType.CUSTOM,
+            content = Json.encodeToString(elem),
+            customElem = elem,
+            createTime = com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
+        )
+    }
+
+    suspend fun createForwardMessage(message: Message): Message {
+        val selfUserId = loginUserId()
+        return message.copy(
+            clientMsgID = ClientMsgIdGenerator.generate(),
+            createTime = com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
+            sendTime = 0,
+            status = MessageStatus.SENDING,
+            sendID = selfUserId,
+        ).withParsedContent()
+    }
+
+    suspend fun createFaceMessage(index: Int = -1, data: String? = null): Message {
+        val payload = """{"index":$index,"data":"${data.orEmpty()}"}"""
+        return Message(
+            clientMsgID = ClientMsgIdGenerator.generate(),
+            contentType = MessageType.CUSTOM_FACE,
+            content = payload,
+            createTime = com.kurban.xuehuaim.sdk.util.System.currentTimeMillis(),
+        )
+    }
+
     suspend fun sendMessage(
         message: Message,
         recvId: String,
@@ -265,6 +314,12 @@ class MessageManager internal constructor(
                 conversationID = conversationId?.takeIf { it.isNotBlank() },
             ).withParsedContent()
             databaseService.insertOrReplaceMessage(sendingMessage)
+            eventEmitter.emitMessage(
+                com.kurban.xuehuaim.sdk.event.MessageEvent.SendProgress(
+                    clientMsgId = message.clientMsgID,
+                    progress = 0,
+                ),
+            )
             try {
                 val reqData = SendMsgReqData(
                     sendID = selfUserId,
@@ -321,6 +376,12 @@ class MessageManager internal constructor(
                 )
                 com.kurban.xuehuaim.sdk.event.MessageEvent.SendSuccess(enriched)
                     .let { eventEmitter.emitMessage(it) }
+                eventEmitter.emitMessage(
+                    com.kurban.xuehuaim.sdk.event.MessageEvent.SendProgress(
+                        clientMsgId = enriched.clientMsgID,
+                        progress = 100,
+                    ),
+                )
                 enriched
             } catch (e: Exception) {
                 val failed = sendingMessage.copy(status = MessageStatus.SEND_FAILED)
@@ -453,18 +514,38 @@ class MessageManager internal constructor(
 
     suspend fun revokeMessage(conversationId: String, clientMsgId: String) =
         withContext(ioDispatcher) {
-            databaseService.deleteMessage(clientMsgId)
+            val msg = databaseService.getMessageByClientMsgId(clientMsgId)
+            val seq = msg?.seq ?: 0L
+            databaseService.updateMessageContentType(clientMsgId, MessageType.MSG_REVOKE.value)
             eventEmitter.emitMessage(
-                com.kurban.xuehuaim.sdk.event.MessageEvent.Revoked(
-                    conversationId,
-                    clientMsgId
-                )
+                com.kurban.xuehuaim.sdk.event.MessageEvent.Revoked(conversationId, clientMsgId),
             )
+            ConversationLatestMsgHelper.updateConversationIfLatestMsg(
+                databaseService = databaseService,
+                eventEmitter = eventEmitter,
+                conversationId = conversationId,
+                clientMsgId = clientMsgId,
+            )
+            if (seq > 0) {
+                runCatching {
+                    apiService.revokeMsg(
+                        loginUserId.requireUserId(),
+                        conversationId,
+                        seq,
+                    )
+                }
+            }
         }
 
     suspend fun deleteMessageFromLocalStorage(conversationId: String, clientMsgId: String) =
         withContext(ioDispatcher) {
             databaseService.deleteMessage(clientMsgId)
+            ConversationLatestMsgHelper.updateConversationIfLatestMsg(
+                databaseService = databaseService,
+                eventEmitter = eventEmitter,
+                conversationId = conversationId,
+                clientMsgId = clientMsgId,
+            )
             eventEmitter.emitMessage(
                 com.kurban.xuehuaim.sdk.event.MessageEvent.Deleted(
                     conversationId,
@@ -473,19 +554,87 @@ class MessageManager internal constructor(
             )
         }
 
-    suspend fun markConversationMessageAsRead(conversationId: String) = withContext(ioDispatcher) {
-        eventEmitter.emitMessage(
-            com.kurban.xuehuaim.sdk.event.MessageEvent.ReadReceipt(conversationId, emptyList()),
+    suspend fun deleteMessageFromLocalAndSvr(conversationId: String, clientMsgId: String) =
+        withContext(ioDispatcher) {
+            val msg = databaseService.getMessageByClientMsgId(clientMsgId)
+            val seq = msg?.seq ?: 0L
+            deleteMessageFromLocalStorage(conversationId, clientMsgId)
+            if (seq > 0) {
+                runCatching {
+                    apiService.deleteMsgs(
+                        loginUserId.requireUserId(),
+                        conversationId,
+                        listOf(seq),
+                    )
+                }
+            }
+        }
+
+    suspend fun deleteAllMsgFromLocal() = withContext(ioDispatcher) {
+        val affected = databaseService.getAllConversations().map { it.conversationID }
+        databaseService.deleteAllChatLogs()
+        if (affected.isNotEmpty()) {
+            val convList = databaseService.getMultipleConversations(affected)
+            convList.forEach { conv ->
+                eventEmitter.emitConversation(com.kurban.xuehuaim.sdk.event.ConversationEvent.Changed(conv))
+            }
+        }
+        eventEmitter.emitConversation(
+            com.kurban.xuehuaim.sdk.event.ConversationEvent.TotalUnreadChanged(
+                databaseService.getTotalUnreadCount(),
+            ),
         )
     }
 
-    suspend fun searchLocalMessages(keyword: String, conversationId: String? = null): SearchResult {
-        val messages = if (conversationId != null) {
-            databaseService.getMessages(conversationId, 200)
-        } else {
-            emptyList()
+    suspend fun deleteAllMsgFromLocalAndSvr() = withContext(ioDispatcher) {
+        deleteAllMsgFromLocal()
+        runCatching { apiService.clearAllMsg(loginUserId.requireUserId()) }
+    }
+
+    suspend fun setMessageLocalEx(conversationId: String, clientMsgId: String, localEx: String) =
+        withContext(ioDispatcher) {
+            databaseService.updateMessageLocalEx(clientMsgId, localEx)
+            val msg = databaseService.getMessageByClientMsgId(clientMsgId) ?: return@withContext
+            ConversationLatestMsgHelper.updateLatestMsgFromMessage(
+                databaseService = databaseService,
+                eventEmitter = eventEmitter,
+                conversationId = conversationId,
+                message = msg.copy(localEx = localEx),
+            )
         }
-        return SearchResult(messageList = messages.filter { it.content?.contains(keyword) == true })
+
+    suspend fun findMessageList(searchParams: List<SearchParams>): SearchResult {
+        val messages = searchParams.flatMap { param ->
+            val ids = param.clientMsgIDList.orEmpty()
+            if (ids.isEmpty()) emptyList() else databaseService.getMessagesByClientMsgIds(ids)
+        }
+        return SearchResult(messageList = messages)
+    }
+
+    suspend fun markConversationMessageAsRead(conversationId: String) =
+        conversationManager?.markConversationMessageAsRead(conversationId)
+            ?: withContext(ioDispatcher) {
+                eventEmitter.emitMessage(
+                    com.kurban.xuehuaim.sdk.event.MessageEvent.ReadReceipt(conversationId, emptyList()),
+                )
+            }
+
+    suspend fun searchLocalMessages(
+        keyword: String,
+        conversationId: String? = null,
+        messageTypeList: List<Int> = emptyList(),
+        pageIndex: Int = 1,
+        count: Int = 40,
+    ): SearchResult {
+        val offset = (pageIndex - 1) * count
+        val messages = databaseService.searchMessages(
+            conversationId = conversationId,
+            keyword = keyword.takeIf { it.isNotBlank() },
+            messageTypes = messageTypeList.takeIf { it.isNotEmpty() },
+            offset = offset,
+            count = count,
+        )
+        return SearchResult(messageList = messages)
     }
 
     suspend fun sendSignalMessage(data: ByteArray): WsRequest =
@@ -525,6 +674,69 @@ class MessageManager internal constructor(
             block()
         }
 
+    suspend fun createImageMessageFromFullPath(path: String, onProgress: ((Int) -> Unit)? = null): Message =
+        createImageMessageFromFullPath(fileSystem, fileUploadService, path, onProgress)
+
+    suspend fun createImageMessageFromBytes(
+        bytes: ByteArray,
+        fileName: String,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createImageMessageFromBytes(fileUploadService, bytes, fileName, onProgress)
+
+    suspend fun createSoundMessageFromFullPath(
+        path: String,
+        duration: Long,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createSoundMessageFromFullPath(fileSystem, fileUploadService, path, duration, onProgress)
+
+    suspend fun createVideoMessageFromFullPath(
+        path: String,
+        duration: Long,
+        snapshotPath: String? = null,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createVideoMessageFromFullPath(
+        fileSystem,
+        fileUploadService,
+        path,
+        duration,
+        snapshotPath,
+        onProgress,
+    )
+
+    suspend fun createFileMessageFromFullPath(
+        path: String,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Message = createFileMessageFromFullPath(fileSystem, fileUploadService, path, onProgress)
+
+    suspend fun recoverSendingMessages() =
+        recoverSendingMessages(databaseService, eventEmitter, loginUserId)
+
+    suspend fun insertSingleMessageToLocalStorage(
+        receiverId: String,
+        senderId: String,
+        message: Message? = null,
+    ): Message = insertSingleMessageToLocalStorage(
+        databaseService,
+        eventEmitter,
+        loginUserId,
+        receiverId,
+        senderId,
+        message,
+    )
+
+    suspend fun insertGroupMessageToLocalStorage(
+        groupId: String,
+        senderId: String,
+        message: Message? = null,
+    ): Message = insertGroupMessageToLocalStorage(
+        databaseService,
+        eventEmitter,
+        loginUserId,
+        groupId,
+        senderId,
+        message,
+    )
+
     private companion object {
         const val USER_MSG_FROM = 100
     }
@@ -533,10 +745,44 @@ class MessageManager internal constructor(
 class ConversationManager internal constructor(
     private val apiService: ImApiService,
     private val databaseService: DatabaseService,
+    private val webSocketService: WebSocketService,
     private val eventEmitter: SdkEventEmitter,
     private val loginUserId: LoginUserIdProvider,
 ) {
     private val markingAsRead = mutableSetOf<String>()
+
+    fun getConversationIDBySessionType(sourceID: String, sessionType: Int): String =
+        OpenImUtils.getConversationIDBySessionType(
+            loginUserId().orEmpty(),
+            sourceID,
+            sessionType,
+        )
+
+    suspend fun getOneConversation(sourceID: String, sessionType: Int): ConversationInfo =
+        withContext(ioDispatcher) {
+            val conversationId = getConversationIDBySessionType(sourceID, sessionType)
+            databaseService.getConversation(conversationId) ?: run {
+                val created = ConversationInfo(
+                    conversationID = conversationId,
+                    conversationType = ConversationType.entries.find { it.value == sessionType },
+                    userID = if (sessionType == ConversationType.SINGLE.value) sourceID else null,
+                    groupID = if (sessionType != ConversationType.SINGLE.value) sourceID else null,
+                    unreadCount = 0,
+                )
+                databaseService.insertOrReplaceConversation(created)
+                databaseService.getConversation(conversationId) ?: created
+            }
+        }
+
+    suspend fun getMultipleConversation(conversationIDList: List<String>): List<ConversationInfo> =
+        withContext(ioDispatcher) {
+            databaseService.getMultipleConversations(conversationIDList)
+        }
+
+    suspend fun searchConversations(name: String): List<ConversationInfo> =
+        withContext(ioDispatcher) {
+            databaseService.searchConversations(name)
+        }
 
     suspend fun getAllConversationList(): List<ConversationInfo> = withContext(ioDispatcher) {
         com.kurban.xuehuaim.sdk.util.ConversationSort.simpleSort(databaseService.getVisibleConversations())
@@ -657,6 +903,109 @@ class ConversationManager internal constructor(
         }
     }
 
+    suspend fun markAllConversationMessageAsRead() = withContext(ioDispatcher) {
+        val unread = databaseService.getAllConversations().filter { it.unreadCount > 0 }
+        unread.forEach { conv ->
+            runCatching { markConversationMessageAsRead(conv.conversationID) }
+        }
+        emitTotalUnread()
+    }
+
+    suspend fun markMessagesAsReadByMsgID(conversationId: String, clientMsgIDs: List<String>) =
+        withContext(ioDispatcher) {
+            if (clientMsgIDs.isEmpty()) return@withContext
+            val conv = databaseService.getConversation(conversationId) ?: return@withContext
+            val msgs = databaseService.getMessagesByClientMsgIds(clientMsgIDs)
+            val selfUserId = loginUserId.requireUserId()
+            val seqs = mutableListOf<Long>()
+            val asReadIds = mutableListOf<String>()
+            msgs.forEach { msg ->
+                if (msg.isRead != true && msg.sendID != selfUserId) {
+                    val seq = msg.seq
+                    if (seq > 0) {
+                        seqs.add(seq)
+                        msg.clientMsgID?.let(asReadIds::add)
+                    }
+                }
+            }
+            if (seqs.isEmpty()) return@withContext
+            runCatching {
+                apiService.markMsgsAsRead(selfUserId, conversationId, seqs)
+            }
+            val decr = databaseService.markConversationMessageAsReadDB(conversationId, asReadIds)
+            databaseService.decrConversationUnreadCount(conversationId, decr)
+            notifyConversationChanged(conversationId)
+        }
+
+    suspend fun clearConversationAndDeleteAllMsg(conversationId: String) =
+        withContext(ioDispatcher) {
+            val conv = databaseService.getConversation(conversationId)
+                ?: throw XueHuaException.from(
+                    SdkErrorCode.PARAM_ERROR,
+                    "conversation not found: $conversationId"
+                )
+            apiService.clearConversationMsg(loginUserId.requireUserId(), listOf(conversationId))
+            databaseService.deleteChatLogsByConversation(conversationId)
+            val hasReadSeq = if (conv.maxSeq > 0) conv.maxSeq else conv.hasReadSeq
+            if (hasReadSeq > 0) {
+                databaseService.updateConversationUnread(conversationId, 0, hasReadSeq)
+            }
+            databaseService.clearConversation(conversationId)
+            notifyConversationChanged(conversationId)
+            emitTotalUnread()
+        }
+
+    suspend fun hideAllConversations() = withContext(ioDispatcher) {
+        databaseService.hideAllConversations()
+        val allConvs = databaseService.getVisibleConversations()
+        allConvs.forEach { conv ->
+            eventEmitter.emitConversation(com.kurban.xuehuaim.sdk.event.ConversationEvent.Changed(conv))
+        }
+        emitTotalUnread()
+    }
+
+    suspend fun changeInputStates(conversationId: String, focus: Boolean) =
+        withContext(ioDispatcher) {
+            val conv = databaseService.getConversation(conversationId) ?: return@withContext
+            val typingPayload = """{"msgTips":"${if (focus) "yes" else "no"}"}"""
+            val msgData = buildMap {
+                put("sendID", loginUserId.requireUserId())
+                put("recvID", conv.userID.orEmpty())
+                put("groupID", conv.groupID.orEmpty())
+                put("clientMsgID", ClientMsgIdGenerator.generate())
+                put("sessionType", conv.conversationType?.value ?: ConversationType.SINGLE.value)
+                put("msgFrom", 100)
+                put("contentType", MessageType.TYPING.value)
+                put("content", typingPayload)
+                put("senderPlatformID", currentPlatform().value)
+                put("createTime", com.kurban.xuehuaim.sdk.util.System.currentTimeMillis())
+                put("sendTime", 0)
+                put(
+                    "options",
+                    mapOf(
+                        "history" to false,
+                        "persistent" to false,
+                        "senderSync" to false,
+                        "conversationUpdate" to false,
+                        "senderConversationUpdate" to false,
+                        "unreadCount" to false,
+                        "offlinePush" to false,
+                    ),
+                )
+            }
+            webSocketService.sendRequest(
+                WsRequest(
+                    reqIdentifier = WsIdentifier.SEND_MSG,
+                    data = Json.encodeToString(msgData).encodeToByteArray(),
+                ),
+            )
+        }
+
+    suspend fun getInputStates(conversationId: String, userID: String): List<Int> =
+        withContext(ioDispatcher) {
+            emptyList()
+        }
+
     suspend fun getTotalUnreadMsgCount(): Int = withContext(ioDispatcher) {
         databaseService.getTotalUnreadCount()
     }
@@ -729,6 +1078,31 @@ class FriendshipManager internal constructor(
     }
 
     suspend fun searchUsers(keyword: String): List<UserInfo> = apiService.searchUsers(keyword)
+
+    suspend fun getFriendsInfo(userIds: List<String>): List<FriendInfo> =
+        getFriendsInfo(apiService, loginUserId, userIds)
+
+    suspend fun checkFriend(userId: String): Boolean =
+        checkFriend(apiService, loginUserId, userId)
+
+    suspend fun searchFriends(keyword: String): List<FriendInfo> =
+        searchFriends(apiService, keyword)
+
+    suspend fun updateFriends(userIds: List<String>, remark: String? = null) =
+        updateFriends(apiService, loginUserId, userIds, remark)
+
+    suspend fun getFriendApplicationListAsRecipient(
+        pageNumber: Int = 1,
+        pageSize: Int = 100,
+    ) = getFriendApplicationListAsRecipient(apiService, loginUserId, pageNumber, pageSize)
+
+    suspend fun getFriendApplicationListAsApplicant(
+        pageNumber: Int = 1,
+        pageSize: Int = 100,
+    ) = getFriendApplicationListAsApplicant(apiService, loginUserId, pageNumber, pageSize)
+
+    suspend fun getFriendApplicationUnhandledCount(time: Long = 0): Int =
+        getFriendApplicationUnhandledCount(apiService, loginUserId, time)
 }
 
 class GroupManager internal constructor(
@@ -787,6 +1161,77 @@ class GroupManager internal constructor(
         pageSize: Int = 100,
     ): List<GroupApplicationInfo> =
         apiService.getSendGroupApplicationList(loginUserId.requireUserId(), pageNumber, pageSize)
+
+    suspend fun joinGroup(
+        groupId: String,
+        reqMessage: String = "",
+        joinSource: Int = 3,
+        inviterUserID: String = "",
+        ex: String = "",
+    ) = withContext(ioDispatcher) {
+        apiService.joinGroup(groupId, reqMessage, joinSource, inviterUserID, ex)
+    }
+
+    suspend fun acceptGroupApplication(
+        groupId: String,
+        userId: String,
+        handleMsg: String = "",
+    ) = withContext(ioDispatcher) {
+        apiService.groupApplicationResponse(groupId, userId, handleMsg, handleResult = 1)
+    }
+
+    suspend fun refuseGroupApplication(
+        groupId: String,
+        userId: String,
+        handleMsg: String = "",
+    ) = withContext(ioDispatcher) {
+        apiService.groupApplicationResponse(groupId, userId, handleMsg, handleResult = -1)
+    }
+
+    suspend fun getGroupApplicationUnhandledCount(time: Long = 0): Int =
+        withContext(ioDispatcher) {
+            apiService.getGroupApplicationUnhandledCount(loginUserId.requireUserId(), time)
+        }
+
+    suspend fun getJoinedGroupListPage(pageNumber: Int, pageSize: Int): List<GroupInfo> =
+        getJoinedGroupListPage(apiService, loginUserId, pageNumber, pageSize)
+
+    suspend fun isJoinedGroup(groupId: String): Boolean =
+        isJoinedGroup(apiService, loginUserId, groupId)
+
+    suspend fun searchGroups(keyword: String): List<GroupInfo> =
+        searchGroups(apiService, keyword)
+
+    suspend fun searchGroupMembers(groupId: String, keyword: String): List<GroupMemberInfo> =
+        searchGroupMembers(apiService, groupId, keyword)
+
+    suspend fun getGroupMembersInfo(groupId: String, userIds: List<String>): List<GroupMemberInfo> =
+        getGroupMembersInfo(apiService, groupId, userIds)
+
+    suspend fun getGroupOwnerAndAdmin(groupId: String): List<GroupMemberInfo> =
+        getGroupOwnerAndAdmin(apiService, groupId)
+
+    suspend fun setGroupMemberInfo(
+        groupId: String,
+        userId: String,
+        nickname: String? = null,
+        faceURL: String? = null,
+    ) = setGroupMemberInfo(apiService, groupId, userId, nickname, faceURL)
+
+    suspend fun transferGroupOwner(groupId: String, newOwnerUserId: String) =
+        transferGroupOwner(apiService, groupId, newOwnerUserId)
+
+    suspend fun getGroupMemberListByJoinTime(groupId: String): List<GroupMemberInfo> =
+        getGroupMemberListByJoinTime(apiService, groupId)
+
+    suspend fun getUsersInGroup(groupId: String, userIds: List<String>): List<GroupMemberInfo> =
+        getUsersInGroup(apiService, groupId, userIds)
+
+    suspend fun changeGroupMute(groupId: String, isMute: Boolean) =
+        changeGroupMute(apiService, groupId, isMute)
+
+    suspend fun changeGroupMemberMute(groupId: String, userId: String, mutedSeconds: Long) =
+        changeGroupMemberMute(apiService, groupId, userId, mutedSeconds)
 }
 
 class UserManager internal constructor(
@@ -942,6 +1387,54 @@ class UserManager internal constructor(
         withContext(ioDispatcher) {
             apiService.changePassword(userID, currentPassword, newPassword)
         }
+
+    suspend fun getUsersInfoWithCache(userIds: List<String>): List<UserInfo> =
+        getUsersInfoWithCache(databaseService, userIds)
+
+    suspend fun getUsersInfoFromSrv(userIds: List<String>): List<UserInfo> =
+        getUsersInfo(userIds)
+
+    suspend fun getSelfUserInfo(): UserInfo? =
+        getSelfUserInfo(databaseService, loginUserId)
+
+    suspend fun subscribeUsersStatus(userIds: List<String>): List<UserStatusInfo> =
+        subscribeUsersStatus(apiService, loginUserId, userIds)
+
+    suspend fun unsubscribeUsersStatus(userIds: List<String>) =
+        unsubscribeUsersStatus(apiService, loginUserId, userIds)
+
+    suspend fun getSubscribeUsersStatus(): List<UserStatusInfo> =
+        getSubscribeUsersStatus(apiService, loginUserId)
+
+    suspend fun getUserStatus(userIds: List<String>): List<UserStatusInfo> =
+        getUserStatus(apiService, loginUserId, userIds)
+
+    suspend fun getUserClientConfig(): Map<String, String> =
+        getUserClientConfig(apiService, loginUserId)
+
+    suspend fun searchFriendInfo(keyword: String): List<FriendInfo> =
+        searchFriendInfo(apiService, keyword)
+
+    suspend fun searchUserFullInfo(keyword: String): List<UserFullInfo> =
+        searchUserFullInfo(apiService, keyword)
+
+    suspend fun getRtcToken(roomId: String, userId: String): String =
+        withContext(ioDispatcher) { apiService.getRtcToken(roomId, userId).token }
+
+    suspend fun resetPaymentPassword(
+        verifyCode: String,
+        newPaymentPassword: String,
+        areaCode: String? = null,
+        phoneNumber: String? = null,
+        email: String? = null,
+    ) = resetPaymentPassword(
+        apiService,
+        verifyCode,
+        newPaymentPassword,
+        areaCode,
+        phoneNumber,
+        email,
+    )
 }
 
 class MomentsManager internal constructor(
@@ -968,11 +1461,13 @@ class MomentsManager internal constructor(
         )
 
     suspend fun likeMoment(momentId: String) = withContext(ioDispatcher) {
-        apiService.likeMoment(momentId, ownerUserID = loginUserId())
+        val like = apiService.likeMoment(momentId, ownerUserID = loginUserId())
+        eventEmitter.emitMoments(com.kurban.xuehuaim.sdk.event.MomentsEvent.Liked(momentId, like))
     }
 
     suspend fun commentMoment(momentId: String, content: String) = withContext(ioDispatcher) {
-        apiService.commentMoment(momentId, content, ownerUserID = loginUserId())
+        val comment = apiService.commentMoment(momentId, content, ownerUserID = loginUserId())
+        eventEmitter.emitMoments(com.kurban.xuehuaim.sdk.event.MomentsEvent.Commented(momentId, comment))
     }
 
     suspend fun unlikeMoment(momentId: String, ownerUserID: String? = null) =
@@ -992,6 +1487,18 @@ class MomentsManager internal constructor(
             com.kurban.xuehuaim.sdk.event.MomentsEvent.CommentDeleted(momentId, commentId),
         )
     }
+
+    suspend fun fetchMomentListFromServer(
+        ownerUserId: String = "",
+        page: Int = 1,
+        size: Int = 20,
+    ): List<MomentInfo> = fetchMomentListFromServer(apiService, ownerUserId, page, size)
+
+    suspend fun syncFromServer(page: Int = 1, size: Int = 20): List<MomentInfo> =
+        syncFromServer(apiService, page, size)
+
+    suspend fun handleNotification(key: String, data: Map<String, String>) =
+        handleNotification(eventEmitter, key, data)
 }
 
 class FavoriteManager internal constructor(
@@ -1010,14 +1517,62 @@ class FavoriteManager internal constructor(
         apiService.deleteFavorite(favoriteId)
         eventEmitter.emitFavorite(com.kurban.xuehuaim.sdk.event.FavoriteEvent.Deleted(favoriteId))
     }
+
+    suspend fun fetchFavoriteListFromServer(pageNumber: Int = 1, showNumber: Int = 20) =
+        fetchFavoriteListFromServer(apiService, pageNumber, showNumber)
+
+    suspend fun syncFromServer(pageNumber: Int = 1, showNumber: Int = 100): List<FavoriteItem> =
+        syncFromServer(apiService, pageNumber, showNumber)
+
+    suspend fun isFavorited(targetType: String, targetId: String): Boolean =
+        isFavorited(apiService, targetType, targetId)
+
+    suspend fun isMessageFavorited(clientMsgId: String): Boolean =
+        isMessageFavorited(apiService, clientMsgId)
+
+    suspend fun isMomentFavorited(momentId: String): Boolean =
+        isMomentFavorited(apiService, momentId)
+
+    suspend fun addMessage(clientMsgId: String, data: String? = null) =
+        addMessage(apiService, eventEmitter, clientMsgId, data)
+
+    suspend fun removeMessage(clientMsgId: String) =
+        removeMessage(apiService, eventEmitter, clientMsgId)
+
+    suspend fun addMoment(momentId: String, data: String? = null) =
+        addMoment(apiService, eventEmitter, momentId, data)
+
+    suspend fun removeMoment(momentId: String) =
+        removeMoment(apiService, eventEmitter, momentId)
+
+    suspend fun addNote(noteId: String, data: String) =
+        addNote(apiService, eventEmitter, noteId, data)
+
+    suspend fun updateNote(favoriteId: String, data: String) =
+        updateNote(apiService, eventEmitter, favoriteId, data)
+
+    suspend fun addLink(linkId: String, data: String) =
+        addLink(apiService, eventEmitter, linkId, data)
+
+    suspend fun updateFavorite(favoriteId: String, data: String) =
+        updateFavorite(apiService, eventEmitter, favoriteId, data)
+
+    suspend fun removeFavoriteItem(targetType: String, targetId: String) =
+        removeFavoriteItem(apiService, eventEmitter, targetType, targetId)
 }
 
 class RedPacketManager internal constructor(
     private val apiService: ImApiService,
+    private val databaseService: DatabaseService,
     private val eventEmitter: SdkEventEmitter,
 ) {
+    private var cachedBalance: Double = 0.0
+    val cachedBalanceValue: Double get() = cachedBalance
+    private val grabbedPacketIds = mutableSetOf<String>()
+
     suspend fun getPointsBalance(): Double = withContext(ioDispatcher) {
-        apiService.getPointsBalance()
+        cachedBalance = ((apiService.getPointsBalance() * 100).toLong() / 100.0)
+        cachedBalance
     }
 
     suspend fun getPointsTransactions(
@@ -1028,27 +1583,56 @@ class RedPacketManager internal constructor(
         apiService.getPointsTransactions(pageNumber, showNumber, txType)
     }
 
-    suspend fun sendRedPacket(title: String, amount: Double, count: Int): RedPacketInfo =
-        withContext(ioDispatcher) {
-            val packet = RedPacketInfo(
-                packetID = ClientMsgIdGenerator.generate(),
-                senderUserID = "",
-                title = title,
-                amount = amount,
-                count = count,
-            )
-            eventEmitter.emitRedPacket(com.kurban.xuehuaim.sdk.event.RedPacketEvent.Received(packet))
-            packet
-        }
+    suspend fun getIncomeTransactions(
+        pageNumber: Int = 1,
+        showNumber: Int = 20,
+    ): Pair<Int, List<PointsTransaction>> = withContext(ioDispatcher) {
+        val (total, items) = getPointsTransactions(pageNumber, showNumber)
+        total to items.filter { it.isIncome }
+    }
+
+    suspend fun getExpenseTransactions(
+        pageNumber: Int = 1,
+        showNumber: Int = 20,
+    ): Pair<Int, List<PointsTransaction>> = withContext(ioDispatcher) {
+        val (total, items) = getPointsTransactions(pageNumber, showNumber)
+        total to items.filter { it.isExpense }
+    }
+
+    suspend fun sendRedPacket(req: SendRedPacketRequest): String = withContext(ioDispatcher) {
+        val packetId = apiService.sendRedPacket(req)
+        cachedBalance = ((cachedBalance - req.totalAmount) * 100).toLong() / 100.0
+        packetId
+    }
 
     suspend fun grabRedPacket(packetId: String): Double = withContext(ioDispatcher) {
+        val amount = apiService.grabRedPacket(packetId)
+        cachedBalance = ((cachedBalance + amount) * 100).toLong() / 100.0
+        markGrabbed(packetId)
         eventEmitter.emitRedPacket(
-            com.kurban.xuehuaim.sdk.event.RedPacketEvent.Grabbed(
-                packetId,
-                0.0
-            )
+            com.kurban.xuehuaim.sdk.event.RedPacketEvent.Grabbed(packetId, amount),
         )
-        0.0
+        amount
+    }
+
+    suspend fun getRedPacketDetail(packetId: String): RedPacketDetail =
+        withContext(ioDispatcher) {
+            apiService.getRedPacketDetail(packetId)
+        }
+
+    fun isGrabbed(packetId: String): Boolean = grabbedPacketIds.contains(packetId)
+
+    suspend fun preloadGrabbedStatus(packetIds: List<String>) = withContext(ioDispatcher) {
+        if (packetIds.isEmpty()) return@withContext
+        val uncached = packetIds.filter { !grabbedPacketIds.contains(it) }
+        if (uncached.isEmpty()) return@withContext
+        val grabbed = databaseService.selectGrabbedRedPacketIds(uncached)
+        grabbedPacketIds.addAll(grabbed)
+    }
+
+    suspend fun markGrabbed(packetId: String) = withContext(ioDispatcher) {
+        grabbedPacketIds.add(packetId)
+        databaseService.markRedPacketGrabbed(packetId)
     }
 }
 
@@ -1057,6 +1641,33 @@ class ReportAppealManager internal constructor(
 ) {
     suspend fun submitReport(report: ReportInfo): ReportInfo = apiService.submitReport(report)
     suspend fun submitAppeal(appeal: AppealInfo): AppealInfo = apiService.submitAppeal(appeal)
+
+    suspend fun reportUser(
+        targetUserId: String,
+        category: String,
+        description: String? = null,
+        evidenceUrls: List<String>? = null,
+    ) = reportUser(apiService, targetUserId, category, description, evidenceUrls)
+
+    suspend fun reportGroup(
+        targetGroupId: String,
+        category: String,
+        description: String? = null,
+        evidenceUrls: List<String>? = null,
+    ) = reportGroup(apiService, targetGroupId, category, description, evidenceUrls)
+
+    suspend fun reportMessage(
+        targetUserId: String,
+        messageId: String,
+        category: String,
+        description: String? = null,
+        evidenceUrls: List<String>? = null,
+    ) = reportMessage(apiService, targetUserId, messageId, category, description, evidenceUrls)
+
+    suspend fun getAppealCaptcha() = getAppealCaptcha(apiService)
+
+    suspend fun uploadAppealEvidence(appealToken: String, bytes: ByteArray, fileName: String) =
+        uploadAppealEvidence(apiService, appealToken, bytes, fileName)
 }
 
 class ApplicationManager internal constructor(
@@ -1077,4 +1688,12 @@ class ApplicationManager internal constructor(
         txType: Int? = null,
     ): Pair<Int, List<PointsTransaction>> =
         apiService.getPointsTransactions(pageNumber, showNumber, txType)
+
+    suspend fun getLatestVersion(
+        platform: String,
+        currentVersion: String? = null,
+    ) = getLatestVersion(apiService, platform, currentVersion)
+
+    suspend fun getLatestVersion(currentVersion: String? = null) =
+        getLatestVersion(apiService, currentVersion)
 }

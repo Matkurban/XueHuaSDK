@@ -6,7 +6,7 @@ import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.DatabaseDriverFactory
 
 internal interface ImDatabase {
-    suspend fun switchSpace(userId: String)
+    suspend fun close()
     suspend fun insertOrReplaceUser(user: UserInfo)
     suspend fun getAllUsers(): List<UserInfo>
     suspend fun insertOrReplaceConversation(conversation: ConversationInfo)
@@ -25,9 +25,24 @@ internal interface ImDatabase {
     suspend fun getVersionSync(tableName: String, entityId: String): VersionSyncInfo?
     suspend fun setVersionSync(tableName: String, entityId: String, versionID: String, version: Int)
     suspend fun deleteVersionSync(tableName: String, entityId: String)
+    suspend fun insertOrReplaceGrabbedRedPacket(packetId: String, grabTime: Long)
+    suspend fun selectGrabbedRedPacket(packetId: String): Long?
+    suspend fun selectGrabbedRedPacketIds(packetIds: List<String>): List<String>
+    suspend fun insertOrReplaceKv(key: String, value: String?, isGlobal: Boolean)
+    suspend fun selectKv(key: String, isGlobal: Boolean): String?
+    suspend fun deleteKv(key: String, isGlobal: Boolean)
+    suspend fun selectMessageByClientMsgId(clientMsgId: String): Message?
+    suspend fun updateChatLogContent(clientMsgId: String, content: String)
+    suspend fun updateMessageContentType(clientMsgId: String, contentType: Int)
+    suspend fun updateMessageLocalEx(clientMsgId: String, localEx: String)
+    suspend fun markMessageAsRead(clientMsgId: String)
+    suspend fun selectAllMessages(): List<Message>
+    suspend fun selectSendingMessages(): List<SendingMessage>
+    suspend fun deleteAllChatLogs()
+    suspend fun hideAllConversations()
 }
 
-internal expect fun createImDatabase(
+internal expect suspend fun createImDatabase(
     driverFactory: DatabaseDriverFactory,
-    dbPath: String
+    dbPath: String,
 ): ImDatabase
