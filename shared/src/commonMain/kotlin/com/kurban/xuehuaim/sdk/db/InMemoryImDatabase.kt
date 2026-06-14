@@ -1,7 +1,6 @@
 package com.kurban.xuehuaim.sdk.db
 
 import com.kurban.xuehuaim.sdk.enum.MessageType
-import com.kurban.xuehuaim.sdk.util.ConversationSort
 import com.kurban.xuehuaim.sdk.model.BlacklistInfo
 import com.kurban.xuehuaim.sdk.model.ConversationInfo
 import com.kurban.xuehuaim.sdk.model.FavoriteItem
@@ -12,6 +11,7 @@ import com.kurban.xuehuaim.sdk.model.Message
 import com.kurban.xuehuaim.sdk.model.MomentInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
+import com.kurban.xuehuaim.sdk.util.ConversationSort
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext

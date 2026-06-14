@@ -34,7 +34,14 @@ internal object GroupSync {
 
             if (resp.full) {
                 log.info { "group full sync (version=${resp.version})" }
-                syncFull(apiService, databaseService, eventEmitter, userId, resp.versionID, resp.version)
+                syncFull(
+                    apiService,
+                    databaseService,
+                    eventEmitter,
+                    userId,
+                    resp.versionID,
+                    resp.version
+                )
                 return@runCatching
             }
 

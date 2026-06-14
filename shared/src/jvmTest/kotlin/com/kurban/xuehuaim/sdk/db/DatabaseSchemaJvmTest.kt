@@ -9,7 +9,10 @@ import kotlin.test.assertTrue
 class DatabaseSchemaJvmTest {
     @Test
     fun reopenExistingDatabaseDoesNotFail() = runBlocking {
-        val dbDir = File(System.getProperty("java.io.tmpdir"), "xuehuaim-db-test-${System.nanoTime()}").apply { mkdirs() }
+        val dbDir = File(
+            System.getProperty("java.io.tmpdir"),
+            "xuehuaim-db-test-${System.nanoTime()}"
+        ).apply { mkdirs() }
         val dbPath = File(dbDir, "user-1.db").absolutePath
         val driverFactory = createDatabaseDriverFactory()
 

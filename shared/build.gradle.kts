@@ -118,7 +118,12 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.js)
                 implementation(libs.sqldelight.web.worker.driver)
-                implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqldelight.get()))
+                implementation(
+                    npm(
+                        "@cashapp/sqldelight-sqljs-worker",
+                        libs.versions.sqldelight.get()
+                    )
+                )
                 implementation(npm("sql.js", "1.8.0"))
             }
         }
@@ -127,7 +132,12 @@ kotlin {
             dependencies {
                 implementation(libs.ktor.client.js)
                 implementation(libs.sqldelight.web.worker.driver)
-                implementation(npm("@cashapp/sqldelight-sqljs-worker", libs.versions.sqldelight.get()))
+                implementation(
+                    npm(
+                        "@cashapp/sqldelight-sqljs-worker",
+                        libs.versions.sqldelight.get()
+                    )
+                )
                 implementation(npm("sql.js", "1.8.0"))
             }
         }
@@ -144,12 +154,12 @@ sqldelight {
     }
 }
 
-signing{
+signing {
     useGpgCmd()
     sign(publishing.publications["kotlinMultiplatform"])
 }
 
-var version=libs.versions.version.get()
+var version = libs.versions.version.get()
 
 mavenPublishing {
     publishToMavenCentral()

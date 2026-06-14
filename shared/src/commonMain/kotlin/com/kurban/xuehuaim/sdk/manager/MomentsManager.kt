@@ -50,11 +50,17 @@ class MomentsManager internal constructor(
         showNumber = showNumber,
     )
 
-    suspend fun likeMoment(momentId: String, ownerUserID: String? = null) = withContext(ioDispatcher) {
-        val like = apiService.likeMoment(momentId, ownerUserID = ownerUserID ?: loginUserId())
-        updateLocalMomentLike(momentId, like, add = true)
-        eventEmitter.emitMoments(com.kurban.xuehuaim.sdk.event.MomentsEvent.Liked(momentId, like))
-    }
+    suspend fun likeMoment(momentId: String, ownerUserID: String? = null) =
+        withContext(ioDispatcher) {
+            val like = apiService.likeMoment(momentId, ownerUserID = ownerUserID ?: loginUserId())
+            updateLocalMomentLike(momentId, like, add = true)
+            eventEmitter.emitMoments(
+                com.kurban.xuehuaim.sdk.event.MomentsEvent.Liked(
+                    momentId,
+                    like
+                )
+            )
+        }
 
     suspend fun commentMoment(
         momentId: String,

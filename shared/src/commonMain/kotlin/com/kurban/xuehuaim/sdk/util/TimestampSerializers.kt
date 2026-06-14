@@ -1,9 +1,9 @@
 package com.kurban.xuehuaim.sdk.util
 
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toInstant
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -20,7 +20,8 @@ internal fun parseTimestampMillis(value: String): Long? {
     val trimmed = value.trim()
     if (trimmed.isEmpty()) return null
     trimmed.toLongOrNull()?.let { return it }
-    runCatching { Instant.parse(trimmed).toEpochMilliseconds() }.getOrNull()?.let { return it }
+    runCatching { kotlin.time.Instant.parse(trimmed).toEpochMilliseconds() }.getOrNull()
+        ?.let { return it }
     val normalized = trimmed.replace(' ', 'T')
     runCatching {
         LocalDateTime.parse(normalized).toInstant(TimeZone.UTC).toEpochMilliseconds()
@@ -32,6 +33,7 @@ object FlexibleNullableTimestampSerializer : KSerializer<Long?> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("FlexibleNullableTimestamp", PrimitiveKind.LONG)
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun deserialize(decoder: Decoder): Long? {
         val jsonDecoder = decoder as? JsonDecoder
         if (jsonDecoder != null) {
@@ -41,12 +43,14 @@ object FlexibleNullableTimestampSerializer : KSerializer<Long?> {
                     element.isString -> parseTimestampMillis(element.content)
                     else -> element.longOrNull
                 }
+
                 else -> null
             }
         }
         return decoder.decodeNullableSerializableValue(Long.serializer())
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     override fun serialize(encoder: Encoder, value: Long?) {
         if (value == null) {
             encoder.encodeNull()

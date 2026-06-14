@@ -14,10 +14,10 @@ import com.kurban.xuehuaim.sdk.network.http.ConversationSeqInfo
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.notify.NotificationDispatcher
 import com.kurban.xuehuaim.sdk.network.ws.WebSocketService
-import com.kurban.xuehuaim.sdk.platform.ioDispatcher
-import com.kurban.xuehuaim.sdk.platform.sdkScope
 import com.kurban.xuehuaim.sdk.network.ws.WsIdentifier
 import com.kurban.xuehuaim.sdk.network.ws.WsRequest
+import com.kurban.xuehuaim.sdk.platform.ioDispatcher
+import com.kurban.xuehuaim.sdk.platform.sdkScope
 import com.kurban.xuehuaim.sdk.sync.ConversationMinSeqSync
 import com.kurban.xuehuaim.sdk.sync.ConversationSync
 import com.kurban.xuehuaim.sdk.sync.FriendSync
@@ -71,7 +71,8 @@ internal class MsgSyncer(
         syncedMaxSeqs.putAll(databaseService.getAllConversationMaxNormalMsgSeqs())
         syncedMaxSeqs.putAll(databaseService.getAllNotificationSeqs())
         val conversations = databaseService.getAllConversations()
-        val installed = databaseService.selectKv(MessageSeqSync.SDK_INSTALLED_KV_KEY, isGlobal = true) == "1"
+        val installed =
+            databaseService.selectKv(MessageSeqSync.SDK_INSTALLED_KV_KEY, isGlobal = true) == "1"
         reinstalled = conversations.isEmpty() && !installed
         log.info { "loadSeq: synced=${syncedMaxSeqs.size} reinstalled=$reinstalled" }
     }
@@ -89,7 +90,10 @@ internal class MsgSyncer(
         }
         eventEmitter.emitConversation(ConversationEvent.SyncStarted(reinstalled = reinstalled))
         eventEmitter.setConversationSyncState(
-            ConversationSyncState.Syncing(progress = if (reinstalled) 0 else 10, reinstalled = reinstalled),
+            ConversationSyncState.Syncing(
+                progress = if (reinstalled) 0 else 10,
+                reinstalled = reinstalled
+            ),
         )
         var syncFailed = false
         if (!reinstalled) {
@@ -108,7 +112,12 @@ internal class MsgSyncer(
         }
         if (!reinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(50))
-            eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 50, reinstalled = false))
+            eventEmitter.setConversationSyncState(
+                ConversationSyncState.Syncing(
+                    progress = 50,
+                    reinstalled = false
+                )
+            )
         }
         runCatching {
             FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
@@ -125,11 +134,19 @@ internal class MsgSyncer(
         }
         if (!reinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(70))
-            eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 70, reinstalled = false))
+            eventEmitter.setConversationSyncState(
+                ConversationSyncState.Syncing(
+                    progress = 70,
+                    reinstalled = false
+                )
+            )
         } else {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(REINSTALL_INIT_PROGRESS))
             eventEmitter.setConversationSyncState(
-                ConversationSyncState.Syncing(progress = REINSTALL_INIT_PROGRESS, reinstalled = true),
+                ConversationSyncState.Syncing(
+                    progress = REINSTALL_INIT_PROGRESS,
+                    reinstalled = true
+                ),
             )
         }
         runCatching {
@@ -146,19 +163,33 @@ internal class MsgSyncer(
         if (!wasReinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(90))
             if (!syncFailed) {
-                eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 90, reinstalled = false))
+                eventEmitter.setConversationSyncState(
+                    ConversationSyncState.Syncing(
+                        progress = 90,
+                        reinstalled = false
+                    )
+                )
             }
         }
         runCatching { syncLatestMessagesForHiddenConversations() }
             .onFailure { e -> log.warn(e) { "latest message pull failed" } }
         if (wasReinstalled) {
-            databaseService.insertOrReplaceKv(MessageSeqSync.SDK_INSTALLED_KV_KEY, "1", isGlobal = true)
+            databaseService.insertOrReplaceKv(
+                MessageSeqSync.SDK_INSTALLED_KV_KEY,
+                "1",
+                isGlobal = true
+            )
             reinstalled = false
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(100))
         }
         val visibleCount = databaseService.getVisibleConversations().size
         log.info { "connected sync finished: visible=$visibleCount reinstalled=$wasReinstalled syncFailed=$syncFailed" }
-        eventEmitter.emitConversation(ConversationEvent.SyncFinished(visibleCount, reinstalled = wasReinstalled))
+        eventEmitter.emitConversation(
+            ConversationEvent.SyncFinished(
+                visibleCount,
+                reinstalled = wasReinstalled
+            )
+        )
         if (!syncFailed) {
             eventEmitter.setConversationSyncState(
                 ConversationSyncState.Finished(count = visibleCount, reinstalled = wasReinstalled),
@@ -298,7 +329,12 @@ internal class MsgSyncer(
         val notificationNeedSync = linkedMapOf<String, LongRange>()
         val notificationContiguous = mutableMapOf<String, MsgList>()
         pullResp.notificationMsgs.forEach { (conversationId, msgList) ->
-            collectPushMessages(conversationId, msgList.msgs, notificationNeedSync, notificationContiguous)
+            collectPushMessages(
+                conversationId,
+                msgList.msgs,
+                notificationNeedSync,
+                notificationContiguous
+            )
         }
         notificationContiguous.forEach { (id, list) ->
             list.msgs.forEach { wsMsg ->
@@ -344,7 +380,10 @@ internal class MsgSyncer(
         }
     }
 
-    private suspend fun pullAndProcessReinstallGaps(needSync: Map<String, LongRange>, pullNums: Long) {
+    private suspend fun pullAndProcessReinstallGaps(
+        needSync: Map<String, LongRange>,
+        pullNums: Long
+    ) {
         if (needSync.isEmpty() || userId.isEmpty()) return
         val total = needSync.size
         var processed = 0
@@ -375,10 +414,16 @@ internal class MsgSyncer(
 
     private suspend fun emitReinstallProgress(processed: Int, total: Int) {
         if (total <= 0) return
-        val progress = (processed * (100 - REINSTALL_INIT_PROGRESS)) / total + REINSTALL_INIT_PROGRESS
+        val progress =
+            (processed * (100 - REINSTALL_INIT_PROGRESS)) / total + REINSTALL_INIT_PROGRESS
         val clamped = progress.coerceIn(0, 100)
         eventEmitter.emitConversation(ConversationEvent.SyncProgress(clamped))
-        eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = clamped, reinstalled = true))
+        eventEmitter.setConversationSyncState(
+            ConversationSyncState.Syncing(
+                progress = clamped,
+                reinstalled = true
+            )
+        )
     }
 
     private suspend fun pullAndProcessGaps(needSync: Map<String, LongRange>, pullNums: Long) {

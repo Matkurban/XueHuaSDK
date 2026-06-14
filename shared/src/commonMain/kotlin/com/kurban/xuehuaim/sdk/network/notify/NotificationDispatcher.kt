@@ -36,10 +36,10 @@ import com.kurban.xuehuaim.sdk.sync.FriendSync
 import com.kurban.xuehuaim.sdk.sync.GroupSync
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.serializer
 
 internal class NotificationDispatcher(
     private val databaseService: DatabaseService,
@@ -170,7 +170,12 @@ internal class NotificationDispatcher(
                         removeAll { it.userID == like.userID }
                         add(like)
                     }
-                    databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                    databaseService.insertOrReplaceMoment(
+                        moment.copy(
+                            likes = likes,
+                            likeCount = likes.size
+                        )
+                    )
                 }
                 eventEmitter.emitMoments(MomentsEvent.Liked(momentId, like))
             }
@@ -180,7 +185,12 @@ internal class NotificationDispatcher(
                 val userId = data["userID"]?.jsonPrimitive?.content.orEmpty()
                 databaseService.getMomentById(momentId)?.let { moment ->
                     val likes = moment.likes.filterNot { it.userID == userId }
-                    databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                    databaseService.insertOrReplaceMoment(
+                        moment.copy(
+                            likes = likes,
+                            likeCount = likes.size
+                        )
+                    )
                 }
                 eventEmitter.emitMoments(MomentsEvent.Unliked(momentId, userId))
             }

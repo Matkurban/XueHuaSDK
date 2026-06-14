@@ -2,8 +2,8 @@ package com.kurban.xuehuaim.sdk.manager
 
 import com.kurban.xuehuaim.sdk.db.DatabaseService
 import com.kurban.xuehuaim.sdk.db.SendingMessage
-import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.ConnectionState
+import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.enum.SdkErrorCode
@@ -438,7 +438,8 @@ class MessageManager internal constructor(
         conversationId: String,
         count: Int,
         startClientMsgId: String?,
-    ): AdvancedMessage = fetchHistoryMessages(conversationId, count, startClientMsgId, isReverse = false)
+    ): AdvancedMessage =
+        fetchHistoryMessages(conversationId, count, startClientMsgId, isReverse = false)
 
     internal suspend fun getAdvancedHistoryMessageListInternal(
         conversationId: String,

@@ -32,15 +32,15 @@ import com.kurban.xuehuaim.sdk.model.ReportInfo
 import com.kurban.xuehuaim.sdk.model.SendRedPacketRequest
 import com.kurban.xuehuaim.sdk.model.UserFullInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
-import com.kurban.xuehuaim.sdk.sync.ConversationSyncApi
-import com.kurban.xuehuaim.sdk.sync.FriendSyncApi
-import com.kurban.xuehuaim.sdk.sync.GroupSyncApi
-import com.kurban.xuehuaim.sdk.sync.VersionedListGapFillApi
 import com.kurban.xuehuaim.sdk.model.UserStatusInfo
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgBySeqsReq
 import com.kurban.xuehuaim.sdk.network.sync.PullMsgResp
 import com.kurban.xuehuaim.sdk.network.sync.SeqRange
 import com.kurban.xuehuaim.sdk.platform.currentPlatform
+import com.kurban.xuehuaim.sdk.sync.ConversationSyncApi
+import com.kurban.xuehuaim.sdk.sync.FriendSyncApi
+import com.kurban.xuehuaim.sdk.sync.GroupSyncApi
+import com.kurban.xuehuaim.sdk.sync.VersionedListGapFillApi
 import com.kurban.xuehuaim.sdk.util.md5Hex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -1327,7 +1327,7 @@ internal open class ImApiService(
         return resp.groupRequests.map { it.toGroupApplicationInfo() }
     }
 
-        suspend fun getSendGroupApplicationList(
+    suspend fun getSendGroupApplicationList(
         userID: String,
         pageNumber: Int = 1,
         pageSize: Int = 100,

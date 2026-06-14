@@ -91,7 +91,8 @@ android {
 }
 ```
 
-> `settings.gradle.kts` 中已启用 `enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")`，因此可通过 `libs.xxx` 类型安全访问 catalog 条目。
+> `settings.gradle.kts` 中已启用 `enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")`，因此可通过
+`libs.xxx` 类型安全访问 catalog 条目。
 
 ### 新增或升级依赖
 

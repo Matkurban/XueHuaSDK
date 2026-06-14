@@ -58,7 +58,8 @@ internal class MessageGapChecker(
         isReverse: Boolean,
     ): List<Message> {
         if (!startClientMsgId.isNullOrBlank()) {
-            val anchor = databaseService.getMessageByClientMsgId(startClientMsgId) ?: return emptyList()
+            val anchor =
+                databaseService.getMessageByClientMsgId(startClientMsgId) ?: return emptyList()
             val beforeSeq = anchor.seq
             if (beforeSeq <= 0) return emptyList()
             val loaded = databaseService.getMessagesBySeqDesc(conversationId, count, beforeSeq)
@@ -115,13 +116,15 @@ internal class MessageGapChecker(
         isReverse: Boolean,
     ): EndBlockResult {
         if (list.size >= count) return EndBlockResult()
-        val conv = databaseService.getConversation(conversationId) ?: return EndBlockResult(isEnd = true)
+        val conv =
+            databaseService.getConversation(conversationId) ?: return EndBlockResult(isEnd = true)
         val seqs = list.map { it.seq }.filter { it > 0 }
         if (isReverse) {
             val currentMaxSeq = conv.maxSeq
             val maxSeq = seqs.maxOrNull() ?: 0L
             if (maxSeq >= currentMaxSeq) return EndBlockResult(isEnd = true)
-            val lost = MessageSeqSync.getLostSeqListWithLimitLength(maxSeq + 1, currentMaxSeq, emptySet())
+            val lost =
+                MessageSeqSync.getLostSeqListWithLimitLength(maxSeq + 1, currentMaxSeq, emptySet())
             if (lost.isEmpty()) return EndBlockResult(isEnd = true)
             gapPuller(conversationId, lost, isReverse)
             return EndBlockResult(shouldRefetch = true, lastMinSeq = seqs.minOrNull())
@@ -133,7 +136,8 @@ internal class MessageGapChecker(
         if (minSeq == 0L && (lastMinSeq ?: 0L) <= userCanPullMinSeq) {
             return EndBlockResult(isEnd = true, lastMinSeq = minSeq)
         }
-        val lost = MessageSeqSync.getLostSeqListWithLimitLength(userCanPullMinSeq, minSeq - 1, emptySet())
+        val lost =
+            MessageSeqSync.getLostSeqListWithLimitLength(userCanPullMinSeq, minSeq - 1, emptySet())
         if (lost.isEmpty()) return EndBlockResult(isEnd = true, lastMinSeq = minSeq)
         gapPuller(conversationId, lost, isReverse)
         return EndBlockResult(shouldRefetch = true, lastMinSeq = minSeq)

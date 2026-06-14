@@ -34,6 +34,7 @@ internal interface ImDatabase {
         count: Int,
         beforeSeq: Long? = null,
     ): List<Message>
+
     suspend fun deleteMessage(clientMsgId: String)
     suspend fun getVersionSync(tableName: String, entityId: String): VersionSyncInfo?
     suspend fun setVersionSync(
@@ -43,6 +44,7 @@ internal interface ImDatabase {
         version: Int,
         uidList: List<String> = emptyList(),
     )
+
     suspend fun deleteVersionSync(tableName: String, entityId: String)
     suspend fun insertOrReplaceGrabbedRedPacket(packetId: String, grabTime: Long)
     suspend fun selectGrabbedRedPacket(packetId: String): Long?

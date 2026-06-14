@@ -19,7 +19,8 @@ internal object ConversationSync {
         eventEmitter: SdkEventEmitter,
         userId: String,
     ): Int {
-        val synced = syncFromServer(apiService as ConversationSyncApi, databaseService, eventEmitter, userId)
+        val synced =
+            syncFromServer(apiService as ConversationSyncApi, databaseService, eventEmitter, userId)
         ConversationDisplayEnricher.enrichConversationDisplayNames(
             apiService = apiService,
             databaseService = databaseService,
@@ -162,7 +163,8 @@ internal object ConversationSync {
             )
         }
 
-        var uidList = databaseService.getVersionSync(VERSION_TABLE, userId)?.uidList.orEmpty().toMutableList()
+        var uidList =
+            databaseService.getVersionSync(VERSION_TABLE, userId)?.uidList.orEmpty().toMutableList()
         resp.delete.orEmpty().forEach { conversationId ->
             databaseService.deleteConversation(conversationId)
             uidList.remove(conversationId)

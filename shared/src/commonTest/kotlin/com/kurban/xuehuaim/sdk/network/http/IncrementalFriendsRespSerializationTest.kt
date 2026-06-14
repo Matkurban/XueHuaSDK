@@ -34,7 +34,8 @@ class IncrementalFriendsRespSerializationTest {
             {"errCode":0,"errMsg":"","errDlt":"","data":{"version":3,"versionID":"v3","full":false,"sortVersion":2,"delete":null,"insert":null,"update":null}}
         """.trimIndent()
 
-        val data = requireNotNull(json.decodeFromString<ApiResponse<IncrementalFriendsResp>>(raw).data)
+        val data =
+            requireNotNull(json.decodeFromString<ApiResponse<IncrementalFriendsResp>>(raw).data)
         assertEquals(2, data.sortVersion)
     }
 }

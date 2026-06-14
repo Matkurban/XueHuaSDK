@@ -78,7 +78,10 @@ class GroupSyncJvmTest {
             versionID: String,
         ): IncrementalJoinGroupResp = incremental
 
-        override suspend fun getJoinedGroupList(fromUserID: String, pageSize: Int): List<GroupInfo> {
+        override suspend fun getJoinedGroupList(
+            fromUserID: String,
+            pageSize: Int
+        ): List<GroupInfo> {
             getJoinedGroupListCallCount++
             return groups
         }

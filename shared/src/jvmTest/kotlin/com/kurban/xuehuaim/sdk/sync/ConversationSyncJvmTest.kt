@@ -62,7 +62,10 @@ class ConversationSyncJvmTest {
 
         ConversationSync.syncFromServer(api, databaseService, SdkEventEmitter(), "user1")
 
-        assertEquals(listOf("c2"), databaseService.getVersionSync("conversations", "user1")?.uidList)
+        assertEquals(
+            listOf("c2"),
+            databaseService.getVersionSync("conversations", "user1")?.uidList
+        )
     }
 
     private suspend fun createTestDatabaseService(): DatabaseService {
@@ -83,7 +86,8 @@ class ConversationSyncJvmTest {
             versionID: String,
         ): IncrementalConversationResp = incrementalResp
 
-        override suspend fun getFullConversationIDs(userID: String): List<String> = fullConversationIDs
+        override suspend fun getFullConversationIDs(userID: String): List<String> =
+            fullConversationIDs
 
         override suspend fun getAllConversations(ownerUserID: String): List<ConversationInfo> {
             fullSyncCalled = true

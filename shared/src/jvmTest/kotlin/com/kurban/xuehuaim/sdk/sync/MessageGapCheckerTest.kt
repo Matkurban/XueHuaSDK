@@ -57,7 +57,8 @@ class MessageGapCheckerTest {
         assertEquals(20, firstPage.messages.size)
 
         val anchor = firstPage.messages.last().clientMsgID
-        val secondPage = checker.fetchMessagesWithGapCheck("c1", count = 20, startClientMsgId = anchor)
+        val secondPage =
+            checker.fetchMessagesWithGapCheck("c1", count = 20, startClientMsgId = anchor)
         assertTrue(secondPage.messages.isNotEmpty())
         assertTrue(secondPage.messages.all { it.seq < firstPage.messages.last().seq })
     }

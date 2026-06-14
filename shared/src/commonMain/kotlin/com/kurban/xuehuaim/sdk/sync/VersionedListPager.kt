@@ -22,7 +22,10 @@ internal object VersionedListPager {
         val versionInfo = databaseService.getVersionSync(FRIEND_VERSION_TABLE, userId)
         val uidList = versionInfo?.uidList.orEmpty()
         if (offset > uidList.size) {
-            throw XueHuaException.from(SdkErrorCode.PARAM_ERROR, "offset exceeds the length of the UID list")
+            throw XueHuaException.from(
+                SdkErrorCode.PARAM_ERROR,
+                "offset exceeds the length of the UID list"
+            )
         }
         val blackIds = if (filterBlack) databaseService.getBlackUserIds() else emptySet()
         val fetchLimit = if (filterBlack && blackIds.isNotEmpty()) count * 2 else count
@@ -56,7 +59,10 @@ internal object VersionedListPager {
         val versionInfo = databaseService.getVersionSync(GROUP_VERSION_TABLE, userId)
         val uidList = versionInfo?.uidList.orEmpty()
         if (offset > uidList.size) {
-            throw XueHuaException.from(SdkErrorCode.PARAM_ERROR, "offset exceeds the length of the UID list")
+            throw XueHuaException.from(
+                SdkErrorCode.PARAM_ERROR,
+                "offset exceeds the length of the UID list"
+            )
         }
         val end = minOf(offset + count, uidList.size)
         val paginatedIds = uidList.subList(offset, end)

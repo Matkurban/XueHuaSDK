@@ -69,7 +69,13 @@ class VersionedListPagerTest {
             listOf(FriendInfo(ownerUserID = "user1", userID = "a", nickname = "A")),
         )
         val api = RecordingGapFillApi(
-            designatedFriends = listOf(FriendInfo(ownerUserID = "user1", userID = "b", nickname = "B")),
+            designatedFriends = listOf(
+                FriendInfo(
+                    ownerUserID = "user1",
+                    userID = "b",
+                    nickname = "B"
+                )
+            ),
         )
 
         val page = VersionedListPager.fetchFriendsPage(

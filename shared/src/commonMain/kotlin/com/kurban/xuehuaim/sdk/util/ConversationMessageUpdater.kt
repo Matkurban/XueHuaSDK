@@ -31,7 +31,11 @@ internal object ConversationMessageUpdater {
         val unreadCount = when {
             isOutgoingSend -> existing?.unreadCount ?: 0
             isBootstrap -> existing?.unreadCount ?: 0
-            existing == null -> MessageSeqSync.unreadCountFromSeq(updatedMaxSeq, existing?.hasReadSeq ?: 0L)
+            existing == null -> MessageSeqSync.unreadCountFromSeq(
+                updatedMaxSeq,
+                existing?.hasReadSeq ?: 0L
+            )
+
             else -> MessageSeqSync.unreadCountFromSeq(updatedMaxSeq, existing.hasReadSeq)
         }
         val peerUserId = when {

@@ -10,7 +10,6 @@ import com.kurban.xuehuaim.sdk.platform.createDatabaseDriverFactory
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class FriendSyncJvmTest {
 
@@ -72,7 +71,10 @@ class FriendSyncJvmTest {
 
         assertEquals(setOf("friend3"), changed)
         assertEquals("Carol", databaseService.getFriendByUserId("friend3")?.nickname)
-        assertEquals(listOf("friend1", "friend3"), databaseService.getVersionSync("friend", "user1")?.uidList)
+        assertEquals(
+            listOf("friend1", "friend3"),
+            databaseService.getVersionSync("friend", "user1")?.uidList
+        )
         assertEquals(0, api.getFriendListCallCount)
     }
 
@@ -109,7 +111,13 @@ class FriendSyncJvmTest {
             fullFriendUserIDs = listOf("b", "a"),
         )
         val databaseService = createTestDatabaseService()
-        databaseService.setVersionSync("friend", "user1", "version-2", 2, uidList = listOf("a", "b"))
+        databaseService.setVersionSync(
+            "friend",
+            "user1",
+            "version-2",
+            2,
+            uidList = listOf("a", "b")
+        )
         val eventEmitter = SdkEventEmitter()
 
         FriendSync.syncFriends(api, databaseService, eventEmitter, "user1")

@@ -39,8 +39,10 @@ internal class SdkEventEmitter {
     private val _conversationEvents = createEventFlow<ConversationEvent>()
     val conversationEvents: SharedFlow<ConversationEvent> = _conversationEvents.asSharedFlow()
 
-    private val _conversationSyncState = MutableStateFlow<ConversationSyncState>(ConversationSyncState.Idle)
-    val conversationSyncState: StateFlow<ConversationSyncState> = _conversationSyncState.asStateFlow()
+    private val _conversationSyncState =
+        MutableStateFlow<ConversationSyncState>(ConversationSyncState.Idle)
+    val conversationSyncState: StateFlow<ConversationSyncState> =
+        _conversationSyncState.asStateFlow()
 
     private val _friendshipEvents = createEventFlow<FriendshipEvent>()
     val friendshipEvents: SharedFlow<FriendshipEvent> = _friendshipEvents.asSharedFlow()
@@ -87,6 +89,7 @@ internal class SdkEventEmitter {
     fun setConversationSyncState(state: ConversationSyncState) {
         _conversationSyncState.value = state
     }
+
     suspend fun emitFriendship(event: FriendshipEvent) = _friendshipEvents.emit(event)
     suspend fun emitGroup(event: GroupEvent) = _groupEvents.emit(event)
     suspend fun emitUser(event: UserEvent) = _userEvents.emit(event)

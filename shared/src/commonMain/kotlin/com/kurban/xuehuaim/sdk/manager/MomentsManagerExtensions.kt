@@ -10,7 +10,9 @@ import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
-internal suspend fun MomentsManager.handleNotification(
+private val json = Json { ignoreUnknownKeys = true }
+
+internal suspend fun handleNotification(
     eventEmitter: SdkEventEmitter,
     databaseService: DatabaseService,
     key: String,
@@ -19,7 +21,7 @@ internal suspend fun MomentsManager.handleNotification(
     when (key) {
         "moment_created" -> data["moment"]?.let {
             runCatching {
-                Json { ignoreUnknownKeys = true }.decodeFromString<MomentInfo>(it)
+                json.decodeFromString<MomentInfo>(it)
             }.getOrNull()?.let { moment ->
                 databaseService.insertOrReplaceMoment(moment)
                 eventEmitter.emitMoments(MomentsEvent.NewMoment(moment))
@@ -39,7 +41,7 @@ internal suspend fun MomentsManager.handleNotification(
             if (momentId.isEmpty()) return@withContext
             data["like"]?.let {
                 runCatching {
-                    Json { ignoreUnknownKeys = true }.decodeFromString<MomentLikeWithUser>(it)
+                    json.decodeFromString<MomentLikeWithUser>(it)
                 }.getOrNull()
             }?.let { like ->
                 databaseService.getMomentById(momentId)?.let { moment ->
@@ -47,7 +49,12 @@ internal suspend fun MomentsManager.handleNotification(
                         removeAll { it.userID == like.userID }
                         add(like)
                     }
-                    databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                    databaseService.insertOrReplaceMoment(
+                        moment.copy(
+                            likes = likes,
+                            likeCount = likes.size
+                        )
+                    )
                 }
                 eventEmitter.emitMoments(MomentsEvent.Liked(momentId, like))
             }
@@ -59,7 +66,12 @@ internal suspend fun MomentsManager.handleNotification(
             if (momentId.isEmpty() || userId.isEmpty()) return@withContext
             databaseService.getMomentById(momentId)?.let { moment ->
                 val likes = moment.likes.filterNot { it.userID == userId }
-                databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                databaseService.insertOrReplaceMoment(
+                    moment.copy(
+                        likes = likes,
+                        likeCount = likes.size
+                    )
+                )
             }
             eventEmitter.emitMoments(MomentsEvent.Unliked(momentId, userId))
         }
@@ -69,7 +81,7 @@ internal suspend fun MomentsManager.handleNotification(
             if (momentId.isEmpty()) return@withContext
             data["comment"]?.let {
                 runCatching {
-                    Json { ignoreUnknownKeys = true }.decodeFromString<MomentCommentWithUser>(it)
+                    json.decodeFromString<MomentCommentWithUser>(it)
                 }.getOrNull()
             }?.let { comment ->
                 databaseService.getMomentById(momentId)?.let { moment ->
