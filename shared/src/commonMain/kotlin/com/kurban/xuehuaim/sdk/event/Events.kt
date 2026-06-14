@@ -12,9 +12,9 @@ import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.InputStatusChangedData
 import com.kurban.xuehuaim.sdk.model.Message
-import com.kurban.xuehuaim.sdk.model.MomentComment
+import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
 import com.kurban.xuehuaim.sdk.model.MomentInfo
-import com.kurban.xuehuaim.sdk.model.MomentLike
+import com.kurban.xuehuaim.sdk.model.MomentLikeWithUser
 import com.kurban.xuehuaim.sdk.model.RedPacketInfo
 
 sealed interface ConnectionEvent {
@@ -105,9 +105,9 @@ sealed interface RedPacketEvent {
 sealed interface MomentsEvent {
     data class NewMoment(val moment: MomentInfo) : MomentsEvent
     data class MomentDeleted(val momentId: String) : MomentsEvent
-    data class Liked(val momentId: String, val like: MomentLike) : MomentsEvent
+    data class Liked(val momentId: String, val like: MomentLikeWithUser) : MomentsEvent
     data class Unliked(val momentId: String, val userId: String) : MomentsEvent
-    data class Commented(val momentId: String, val comment: MomentComment) : MomentsEvent
+    data class Commented(val momentId: String, val comment: MomentCommentWithUser) : MomentsEvent
     data class CommentDeleted(val momentId: String, val commentId: String) : MomentsEvent
     data class ListUpdated(val moments: List<MomentInfo>) : MomentsEvent
 }

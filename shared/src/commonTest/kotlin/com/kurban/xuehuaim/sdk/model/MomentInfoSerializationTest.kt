@@ -81,4 +81,44 @@ class MomentInfoSerializationTest {
 
         assertTrue(moment.media.isEmpty())
     }
+
+    @Test
+    fun deserializeMomentCommentWithUserWithReply() {
+        val payload = """
+            {
+              "commentID": "c1",
+              "momentID": "m1",
+              "userID": "u1",
+              "replyToUserID": "u2",
+              "content": "hello",
+              "status": 0,
+              "createTime": "2024-01-01",
+              "updateTime": "2024-01-01",
+              "userInfo": {"userID": "u1", "nickname": "Alice", "faceURL": ""},
+              "replyToUser": {"userID": "u2", "nickname": "Bob", "faceURL": ""}
+            }
+        """.trimIndent()
+
+        val comment = json.decodeFromString<MomentCommentWithUser>(payload)
+
+        assertEquals("c1", comment.commentID)
+        assertEquals("u2", comment.replyToUserID)
+        assertEquals("Alice", comment.userInfo?.nickname)
+        assertEquals("Bob", comment.replyToUser?.nickname)
+    }
+
+    @Test
+    fun serializeMomentCreateReqMatchesDartShape() {
+        val request = MomentCreateReq(
+            content = "hello",
+            media = listOf(MomentMedia(type = "image", url = "https://example.com/a.jpg")),
+            visibleType = 3,
+            extra = "",
+        )
+        val encoded = json.encodeToString(MomentCreateReq.serializer(), request)
+        assertTrue(encoded.contains("\"visibleType\":3"))
+        assertTrue(encoded.contains("\"coverURL\"").not())
+        assertTrue(encoded.contains("\"media\""))
+        assertTrue(!encoded.contains("visibleGroupIDs"))
+    }
 }

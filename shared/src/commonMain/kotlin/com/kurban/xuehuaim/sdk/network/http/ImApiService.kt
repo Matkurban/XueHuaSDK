@@ -21,9 +21,10 @@ import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.JoinMeetingResult
 import com.kurban.xuehuaim.sdk.model.Message
-import com.kurban.xuehuaim.sdk.model.MomentComment
+import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
+import com.kurban.xuehuaim.sdk.model.MomentCreateReq
 import com.kurban.xuehuaim.sdk.model.MomentInfo
-import com.kurban.xuehuaim.sdk.model.MomentLike
+import com.kurban.xuehuaim.sdk.model.MomentLikeWithUser
 import com.kurban.xuehuaim.sdk.model.MomentListResponse
 import com.kurban.xuehuaim.sdk.model.PointsTransaction
 import com.kurban.xuehuaim.sdk.model.RedPacketDetail
@@ -727,15 +728,13 @@ internal data class MomentListResp(
 )
 
 @Serializable
-internal data class CreateMomentReq(
-    @SerialName("content") val content: String,
-    @SerialName("visibleType") val visibleType: Int = 1,
-    @SerialName("extra") val extra: String = "",
+internal data class CreateMomentResp(
+    @SerialName("moment") val moment: MomentInfo? = null,
 )
 
 @Serializable
-internal data class CreateMomentResp(
-    @SerialName("moment") val moment: MomentInfo? = null,
+internal data class MomentCommentResp(
+    @SerialName("comment") val comment: MomentCommentWithUser? = null,
 )
 
 @Serializable
@@ -748,6 +747,7 @@ internal data class MomentLikeReq(
 internal data class MomentCommentReq(
     @SerialName("momentID") val momentID: String,
     @SerialName("content") val content: String,
+    @SerialName("replyToUserID") val replyToUserID: String? = null,
     @SerialName("ownerUserID") val ownerUserID: String? = null,
 )
 
@@ -1128,10 +1128,10 @@ internal open class ImApiService(
         return resp.groupInfos
     }
 
-    suspend fun createMoment(content: String, visibleType: Int = 1): MomentInfo {
+    suspend fun createMoment(request: MomentCreateReq): MomentInfo {
         val resp: CreateMomentResp = httpClient.chatPostEnvelope(
             ChatApiRoutes.MOMENT_CREATE,
-            CreateMomentReq(content = content, visibleType = visibleType),
+            request,
         )
         return resp.moment ?: throw XueHuaException(code = -1, message = "empty response data")
     }
@@ -1353,7 +1353,7 @@ internal open class ImApiService(
         return MomentListResponse(total = resp.total, moments = resp.moments)
     }
 
-    suspend fun likeMoment(momentID: String, ownerUserID: String? = null): MomentLike =
+    suspend fun likeMoment(momentID: String, ownerUserID: String? = null): MomentLikeWithUser =
         httpClient.chatPostEnvelope(
             ChatApiRoutes.MOMENT_LIKE,
             MomentLikeReq(momentID = momentID, ownerUserID = ownerUserID),
@@ -1362,11 +1362,20 @@ internal open class ImApiService(
     suspend fun commentMoment(
         momentID: String,
         content: String,
+        replyToUserID: String? = null,
         ownerUserID: String? = null,
-    ): MomentComment = httpClient.chatPostEnvelope(
-        ChatApiRoutes.MOMENT_COMMENT,
-        MomentCommentReq(momentID = momentID, content = content, ownerUserID = ownerUserID),
-    )
+    ): MomentCommentWithUser {
+        val resp: MomentCommentResp = httpClient.chatPostEnvelope(
+            ChatApiRoutes.MOMENT_COMMENT,
+            MomentCommentReq(
+                momentID = momentID,
+                content = content,
+                replyToUserID = replyToUserID?.takeIf { it.isNotBlank() },
+                ownerUserID = ownerUserID,
+            ),
+        )
+        return resp.comment ?: throw XueHuaException(code = -1, message = "empty response data")
+    }
 
     suspend fun deleteMoment(momentID: String) {
         httpClient.chatPostVoid(ChatApiRoutes.MOMENT_DELETE, MomentDeleteReq(momentID = momentID))

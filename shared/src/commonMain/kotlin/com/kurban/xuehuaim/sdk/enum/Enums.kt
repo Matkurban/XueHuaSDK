@@ -22,6 +22,17 @@ enum class TokenCheckResult {
     NetworkError,
 }
 
+enum class VisibleType(val value: Int) {
+    FRIEND(1),
+    SELF(3),
+    ;
+
+    companion object {
+        fun fromValue(value: Int?): VisibleType =
+            entries.find { it.value == value } ?: FRIEND
+    }
+}
+
 enum class FavoriteType(val value: String) {
     MESSAGE("message"),
     MOMENT_CONTENT("moment_content"),

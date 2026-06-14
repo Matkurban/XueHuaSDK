@@ -87,6 +87,7 @@ internal interface ImDatabase {
 
     suspend fun getMomentsPage(offset: Int, count: Int): List<MomentInfo>
     suspend fun getMomentsByUserIdPage(userId: String, offset: Int, count: Int): List<MomentInfo>
+    suspend fun getMomentById(momentId: String): MomentInfo?
     suspend fun insertOrReplaceMoment(moment: MomentInfo)
     suspend fun batchUpsertMoments(moments: List<MomentInfo>)
     suspend fun deleteMoment(momentId: String)

@@ -508,6 +508,10 @@ internal class InMemoryImDatabase : ImDatabase {
         }
     }
 
+    override suspend fun getMomentById(momentId: String): MomentInfo? = withContext(ioDispatcher) {
+        mutex.withLock { moments.find { it.momentID == momentId } }
+    }
+
     override suspend fun insertOrReplaceMoment(moment: MomentInfo) = withContext(ioDispatcher) {
         mutex.withLock {
             moments.removeAll { it.momentID == moment.momentID }

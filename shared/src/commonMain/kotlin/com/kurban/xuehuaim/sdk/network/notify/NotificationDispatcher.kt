@@ -24,9 +24,9 @@ import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
 import com.kurban.xuehuaim.sdk.model.InputStatusChangedData
 import com.kurban.xuehuaim.sdk.model.Message
-import com.kurban.xuehuaim.sdk.model.MomentComment
+import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
 import com.kurban.xuehuaim.sdk.model.MomentInfo
-import com.kurban.xuehuaim.sdk.model.MomentLike
+import com.kurban.xuehuaim.sdk.model.MomentLikeWithUser
 import com.kurban.xuehuaim.sdk.model.RedPacketInfo
 import com.kurban.xuehuaim.sdk.model.UserInfo
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
@@ -36,6 +36,7 @@ import com.kurban.xuehuaim.sdk.sync.FriendSync
 import com.kurban.xuehuaim.sdk.sync.GroupSync
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -145,45 +146,75 @@ internal class NotificationDispatcher(
     private suspend fun handleMomentNotification(key: String, dataStr: String) {
         val data = parseJsonMap(dataStr) ?: return
         when (key) {
-            "moment_created" -> parseContent<MomentInfo>(dataStr)?.let {
-                eventEmitter.emitMoments(MomentsEvent.NewMoment(it))
+            "moment_created" -> parseContent<MomentInfo>(dataStr)?.let { moment ->
+                databaseService.insertOrReplaceMoment(moment)
+                eventEmitter.emitMoments(MomentsEvent.NewMoment(moment))
             }
 
             "moment_deleted" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
+                databaseService.deleteMoment(momentId)
                 eventEmitter.emitMoments(MomentsEvent.MomentDeleted(momentId))
             }
 
             "moment_liked" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
-                val like = MomentLike(
-                    userID = data["userID"]?.jsonPrimitive?.content.orEmpty(),
-                    nickname = data["nickname"]?.jsonPrimitive?.content,
-                    createTime = data["createTime"]?.jsonPrimitive?.content,
-                )
+                val like = parseNestedContent<MomentLikeWithUser>(data, "like")
+                    ?: MomentLikeWithUser(
+                        momentID = momentId,
+                        userID = data["userID"]?.jsonPrimitive?.content.orEmpty(),
+                        createTime = data["createTime"]?.jsonPrimitive?.content,
+                    )
+                databaseService.getMomentById(momentId)?.let { moment ->
+                    val likes = moment.likes.toMutableList().apply {
+                        removeAll { it.userID == like.userID }
+                        add(like)
+                    }
+                    databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                }
                 eventEmitter.emitMoments(MomentsEvent.Liked(momentId, like))
             }
 
             "moment_unliked" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val userId = data["userID"]?.jsonPrimitive?.content.orEmpty()
+                databaseService.getMomentById(momentId)?.let { moment ->
+                    val likes = moment.likes.filterNot { it.userID == userId }
+                    databaseService.insertOrReplaceMoment(moment.copy(likes = likes, likeCount = likes.size))
+                }
                 eventEmitter.emitMoments(MomentsEvent.Unliked(momentId, userId))
             }
 
             "moment_commented" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
-                val comment = MomentComment(
-                    commentID = data["commentID"]?.jsonPrimitive?.content.orEmpty(),
-                    userID = data["userID"]?.jsonPrimitive?.content.orEmpty(),
-                    content = data["content"]?.jsonPrimitive?.content,
-                    createTime = data["createTime"]?.jsonPrimitive?.content,
-                )
+                val comment = parseNestedContent<MomentCommentWithUser>(data, "comment")
+                    ?: MomentCommentWithUser(
+                        commentID = data["commentID"]?.jsonPrimitive?.content.orEmpty(),
+                        momentID = momentId,
+                        userID = data["userID"]?.jsonPrimitive?.content.orEmpty(),
+                        content = data["content"]?.jsonPrimitive?.content,
+                        createTime = data["createTime"]?.jsonPrimitive?.content,
+                    )
+                databaseService.getMomentById(momentId)?.let { moment ->
+                    val comments = moment.comments.toMutableList().apply {
+                        if (none { it.commentID == comment.commentID }) add(comment)
+                    }
+                    databaseService.insertOrReplaceMoment(
+                        moment.copy(comments = comments, commentCount = comments.size),
+                    )
+                }
                 eventEmitter.emitMoments(MomentsEvent.Commented(momentId, comment))
             }
 
             "moment_comment_deleted" -> {
                 val momentId = data["momentID"]?.jsonPrimitive?.content ?: return
                 val commentId = data["commentID"]?.jsonPrimitive?.content ?: return
+                databaseService.getMomentById(momentId)?.let { moment ->
+                    val comments = moment.comments.filterNot { it.commentID == commentId }
+                    databaseService.insertOrReplaceMoment(
+                        moment.copy(comments = comments, commentCount = comments.size),
+                    )
+                }
                 eventEmitter.emitMoments(MomentsEvent.CommentDeleted(momentId, commentId))
             }
 
@@ -444,6 +475,16 @@ internal class NotificationDispatcher(
             json.decodeFromString<T>(content)
         } catch (e: Exception) {
             log.error(e) { "parse notification failed" }
+            null
+        }
+    }
+
+    private inline fun <reified T> parseNestedContent(data: JsonObject, key: String): T? {
+        val nested = data[key] ?: return null
+        return try {
+            json.decodeFromJsonElement(serializer<T>(), nested)
+        } catch (e: Exception) {
+            log.error(e) { "parse nested notification failed: $key" }
             null
         }
     }

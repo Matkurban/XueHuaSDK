@@ -9,6 +9,7 @@ import com.kurban.xuehuaim.sdk.enum.GroupType
 import com.kurban.xuehuaim.sdk.enum.MessageStatus
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.enum.ReceiveMessageOpt
+import com.kurban.xuehuaim.sdk.enum.VisibleType
 import com.kurban.xuehuaim.sdk.util.FlexibleNullableTimestampSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -20,7 +21,12 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 @Serializable
 data class UserInfo(
@@ -361,13 +367,88 @@ data class SearchResult(
 )
 
 @Serializable
+data class MomentUserInfo(
+    val userID: String = "",
+    val nickname: String = "",
+    val faceURL: String = "",
+)
+
+@Serializable
 data class MomentMedia(
     val type: String = "",
     val url: String = "",
     @SerialName("coverURL") val coverUrl: String? = null,
     val duration: Int? = null,
     val extra: String? = null,
+) {
+    val isVideo: Boolean get() = type.equals("video", ignoreCase = true)
+}
+
+@Serializable(with = MomentCreateReqSerializer::class)
+data class MomentCreateReq(
+    val content: String,
+    val media: List<MomentMedia> = emptyList(),
+    val visibleType: Int = VisibleType.FRIEND.value,
+    val visibleGroupIDs: List<String> = emptyList(),
+    val extra: String = "",
 )
+
+@Serializable
+private data class MomentCreateReqBody(
+    val content: String,
+    val media: List<MomentMedia> = emptyList(),
+    val visibleType: Int = VisibleType.FRIEND.value,
+    val visibleGroupIDs: List<String> = emptyList(),
+    val extra: String = "",
+)
+
+internal object MomentCreateReqSerializer : KSerializer<MomentCreateReq> {
+    private val bodySerializer = MomentCreateReqBody.serializer()
+
+    override val descriptor: SerialDescriptor = bodySerializer.descriptor
+
+    override fun deserialize(decoder: Decoder): MomentCreateReq {
+        val body = decoder.decodeSerializableValue(bodySerializer)
+        return MomentCreateReq(
+            content = body.content,
+            media = body.media,
+            visibleType = body.visibleType,
+            visibleGroupIDs = body.visibleGroupIDs,
+            extra = body.extra,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: MomentCreateReq) {
+        val jsonEncoder = encoder as? JsonEncoder
+            ?: return encoder.encodeSerializableValue(bodySerializer, value.toBody())
+        val mediaJson = jsonEncoder.json.encodeToJsonElement(
+            ListSerializer(MomentMedia.serializer()),
+            value.media,
+        )
+        val element = buildJsonObject {
+            put("content", value.content)
+            if (value.media.isNotEmpty()) {
+                put("media", mediaJson)
+            }
+            put("visibleType", value.visibleType)
+            if (value.visibleGroupIDs.isNotEmpty()) {
+                putJsonArray("visibleGroupIDs") {
+                    value.visibleGroupIDs.forEach { add(JsonPrimitive(it)) }
+                }
+            }
+            put("extra", value.extra)
+        }
+        jsonEncoder.encodeJsonElement(element)
+    }
+
+    private fun MomentCreateReq.toBody() = MomentCreateReqBody(
+        content = content,
+        media = media,
+        visibleType = visibleType,
+        visibleGroupIDs = visibleGroupIDs,
+        extra = extra,
+    )
+}
 
 object NullableMomentMediaListSerializer : KSerializer<List<MomentMedia>> {
     private val delegate = ListSerializer(MomentMedia.serializer())
@@ -397,37 +478,40 @@ data class MomentInfo(
     @Serializable(with = NullableMomentMediaListSerializer::class)
     val media: List<MomentMedia> = emptyList(),
     val visibleType: Int? = null,
+    val visibleGroupIDs: List<String> = emptyList(),
+    val status: Int? = null,
     val createTime: String? = null,
+    val updateTime: String? = null,
     val likeCount: Int? = null,
     val commentCount: Int? = null,
-    val likes: List<MomentLike> = emptyList(),
-    val comments: List<MomentComment> = emptyList(),
+    val extra: String? = null,
+    val likes: List<MomentLikeWithUser> = emptyList(),
+    val comments: List<MomentCommentWithUser> = emptyList(),
 )
 
 @Serializable
-data class MomentLike(
+data class MomentLikeWithUser(
+    val momentID: String = "",
     val userID: String,
-    val nickname: String? = null,
-    val createTime: String? = null
-)
-
-@Serializable
-data class MomentComment(
-    val commentID: String,
-    val userID: String,
-    val content: String? = null,
-    val createTime: String? = null
-)
+    val createTime: String? = null,
+    val userInfo: MomentUserInfo? = null,
+) {
+    val nickname: String?
+        get() = userInfo?.nickname?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 data class MomentCommentWithUser(
     val commentID: String,
-    val momentID: String,
+    val momentID: String = "",
     val userID: String,
-    val nickname: String? = null,
-    val faceURL: String? = null,
+    val replyToUserID: String = "",
     val content: String? = null,
+    val status: Int? = null,
     val createTime: String? = null,
+    val updateTime: String? = null,
+    val userInfo: MomentUserInfo? = null,
+    val replyToUser: MomentUserInfo? = null,
 )
 
 @Serializable

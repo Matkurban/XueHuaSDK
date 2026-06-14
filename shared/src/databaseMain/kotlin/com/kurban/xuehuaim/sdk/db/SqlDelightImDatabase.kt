@@ -448,6 +448,10 @@ internal class SqlDelightImDatabase(
             .map(SocialDbMappers::momentFromRow)
     }
 
+    override suspend fun getMomentById(momentId: String): MomentInfo? = withContext(ioDispatcher) {
+        queries.selectMomentByID(momentId).executeAsOneOrNull()?.let(SocialDbMappers::momentFromRow)
+    }
+
     override suspend fun insertOrReplaceMoment(moment: MomentInfo) = withContext(ioDispatcher) {
         queries.insertOrReplaceMoment(SocialDbMappers.momentToRow(moment))
         Unit

@@ -443,6 +443,9 @@ SELECT * FROM local_moments ORDER BY createTime DESC LIMIT ? OFFSET ?;
 selectMomentsByUserIDPage:
 SELECT * FROM local_moments WHERE userID = ? ORDER BY createTime DESC LIMIT ? OFFSET ?;
 
+selectMomentByID:
+SELECT * FROM local_moments WHERE momentID = ? LIMIT 1;
+
 insertOrReplaceMoment:
 INSERT OR REPLACE INTO local_moments VALUES ?;
 

@@ -7,9 +7,9 @@ import com.kurban.xuehuaim.sdk.model.FavoriteItem
 import com.kurban.xuehuaim.sdk.model.FriendInfo
 import com.kurban.xuehuaim.sdk.model.GroupInfo
 import com.kurban.xuehuaim.sdk.model.GroupMemberInfo
-import com.kurban.xuehuaim.sdk.model.MomentComment
+import com.kurban.xuehuaim.sdk.model.MomentCommentWithUser
 import com.kurban.xuehuaim.sdk.model.MomentInfo
-import com.kurban.xuehuaim.sdk.model.MomentLike
+import com.kurban.xuehuaim.sdk.model.MomentLikeWithUser
 import kotlinx.serialization.json.Json
 
 internal object SocialDbMappers {
@@ -138,9 +138,13 @@ internal object SocialDbMappers {
         content = row.content,
         media = row.media?.let { decodeJsonList(it) } ?: emptyList(),
         visibleType = row.visibleType?.toInt(),
+        visibleGroupIDs = row.visibleGroupIDs?.let { decodeStringList(it) } ?: emptyList(),
+        status = row.status?.toInt(),
         createTime = row.createTime,
+        updateTime = row.updateTime,
         likeCount = row.likeCount?.toInt(),
         commentCount = row.commentCount?.toInt(),
+        extra = row.extra,
         likes = row.likes?.let { decodeLikes(it) } ?: emptyList(),
         comments = row.comments?.let { decodeComments(it) } ?: emptyList(),
     )
@@ -151,13 +155,13 @@ internal object SocialDbMappers {
         content = moment.content,
         media = json.encodeToString(moment.media),
         visibleType = moment.visibleType?.toLong(),
-        visibleGroupIDs = null,
-        status = null,
+        visibleGroupIDs = encodeStringList(moment.visibleGroupIDs),
+        status = moment.status?.toLong(),
         createTime = moment.createTime,
-        updateTime = null,
+        updateTime = moment.updateTime,
         likeCount = moment.likeCount?.toLong(),
         commentCount = moment.commentCount?.toLong(),
-        extra = null,
+        extra = moment.extra,
         likes = json.encodeToString(moment.likes),
         comments = json.encodeToString(moment.comments),
     )
@@ -183,6 +187,12 @@ internal object SocialDbMappers {
     private inline fun <reified T> decodeJsonList(raw: String): List<T> =
         runCatching { json.decodeFromString<List<T>>(raw) }.getOrDefault(emptyList())
 
-    private fun decodeLikes(raw: String): List<MomentLike> = decodeJsonList(raw)
-    private fun decodeComments(raw: String): List<MomentComment> = decodeJsonList(raw)
+    private fun decodeLikes(raw: String): List<MomentLikeWithUser> = decodeJsonList(raw)
+    private fun decodeComments(raw: String): List<MomentCommentWithUser> = decodeJsonList(raw)
+
+    private fun decodeStringList(raw: String): List<String> =
+        runCatching { json.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+
+    private fun encodeStringList(values: List<String>): String? =
+        values.takeIf { it.isNotEmpty() }?.let { json.encodeToString(it) }
 }

@@ -331,6 +331,10 @@ class DatabaseService(
     suspend fun getMomentsByUserIdPage(userId: String, offset: Int, count: Int): List<MomentInfo> =
         db().getMomentsByUserIdPage(userId, offset, count)
 
+    suspend fun getMomentById(momentId: String): MomentInfo? = db().getMomentById(momentId)
+
+    suspend fun insertOrReplaceMoment(moment: MomentInfo) = db().insertOrReplaceMoment(moment)
+
     suspend fun batchUpsertMoments(moments: List<MomentInfo>) = db().batchUpsertMoments(moments)
 
     suspend fun deleteMoment(momentId: String) = db().deleteMoment(momentId)
