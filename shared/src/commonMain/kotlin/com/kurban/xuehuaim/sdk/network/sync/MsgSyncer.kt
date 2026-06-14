@@ -5,6 +5,7 @@ import com.kurban.xuehuaim.sdk.enum.ConnectionState
 import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.event.ConversationEvent
+import com.kurban.xuehuaim.sdk.event.ConversationSyncState
 import com.kurban.xuehuaim.sdk.event.MessageEvent
 import com.kurban.xuehuaim.sdk.flow.SdkEventEmitter
 import com.kurban.xuehuaim.sdk.manager.CallManager
@@ -87,6 +88,9 @@ internal class MsgSyncer(
             return@withContext
         }
         eventEmitter.emitConversation(ConversationEvent.SyncStarted(reinstalled = reinstalled))
+        eventEmitter.setConversationSyncState(
+            ConversationSyncState.Syncing(progress = if (reinstalled) 0 else 10, reinstalled = reinstalled),
+        )
         var syncFailed = false
         if (!reinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(10))
@@ -104,6 +108,7 @@ internal class MsgSyncer(
         }
         if (!reinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(50))
+            eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 50, reinstalled = false))
         }
         runCatching {
             FriendSync.syncFriends(apiService, databaseService, eventEmitter, userId)
@@ -120,8 +125,12 @@ internal class MsgSyncer(
         }
         if (!reinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(70))
+            eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 70, reinstalled = false))
         } else {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(REINSTALL_INIT_PROGRESS))
+            eventEmitter.setConversationSyncState(
+                ConversationSyncState.Syncing(progress = REINSTALL_INIT_PROGRESS, reinstalled = true),
+            )
         }
         runCatching {
             syncMessageGapsFromServer(MessageSeqSync.CONNECT_PULL_NUMS)
@@ -132,9 +141,13 @@ internal class MsgSyncer(
         val wasReinstalled = reinstalled
         if (syncFailed) {
             eventEmitter.emitConversation(ConversationEvent.SyncFailed("partial sync failed"))
+            eventEmitter.setConversationSyncState(ConversationSyncState.Failed("partial sync failed"))
         }
         if (!wasReinstalled) {
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(90))
+            if (!syncFailed) {
+                eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = 90, reinstalled = false))
+            }
         }
         runCatching { syncLatestMessagesForHiddenConversations() }
             .onFailure { e -> log.warn(e) { "latest message pull failed" } }
@@ -144,8 +157,13 @@ internal class MsgSyncer(
             eventEmitter.emitConversation(ConversationEvent.SyncProgress(100))
         }
         val visibleCount = databaseService.getVisibleConversations().size
-        log.info { "connected sync finished: visible=$visibleCount reinstalled=$wasReinstalled" }
+        log.info { "connected sync finished: visible=$visibleCount reinstalled=$wasReinstalled syncFailed=$syncFailed" }
         eventEmitter.emitConversation(ConversationEvent.SyncFinished(visibleCount, reinstalled = wasReinstalled))
+        if (!syncFailed) {
+            eventEmitter.setConversationSyncState(
+                ConversationSyncState.Finished(count = visibleCount, reinstalled = wasReinstalled),
+            )
+        }
         backgroundSyncHandler?.let { handler ->
             sdkScope.launch {
                 runCatching { handler() }
@@ -225,15 +243,18 @@ internal class MsgSyncer(
         }
     }
 
-    suspend fun syncMessageGapsFromServer(pullNums: Long) = MessageSyncMutex.withLock {
+    suspend fun syncMessageGapsFromServer(pullNums: Long) {
+        log.info { "message gap sync from server start userId=$userId pullNums=$pullNums" }
         val seqResp = apiService.getConversationsHasReadAndMaxSeq(userId, emptyList())
         syncMessageGaps(seqResp.seqs, pullNums)
+        log.info { "message gap sync from server end convCount=${seqResp.seqs.size}" }
     }
 
     suspend fun syncMessageGaps(
         serverSeqs: Map<String, ConversationSeqInfo>,
         pullNums: Long,
     ) = MessageSyncMutex.withLock {
+        log.info { "message gap sync start convCount=${serverSeqs.size} pullNums=$pullNums" }
         val isReinstallSync = reinstalled
         if (isReinstallSync) {
             val notificationSeqs = MessageSeqSync.notificationSeqsFromServer(
@@ -254,6 +275,7 @@ internal class MsgSyncer(
         } else {
             pullAndProcessGaps(needSync, pullNums)
         }
+        log.info { "message gap sync end needSyncCount=${needSync.size}" }
     }
 
     private suspend fun handlePushPullResp(pullResp: com.kurban.xuehuaim.sdk.network.sync.PullMsgResp) {
@@ -354,7 +376,9 @@ internal class MsgSyncer(
     private suspend fun emitReinstallProgress(processed: Int, total: Int) {
         if (total <= 0) return
         val progress = (processed * (100 - REINSTALL_INIT_PROGRESS)) / total + REINSTALL_INIT_PROGRESS
-        eventEmitter.emitConversation(ConversationEvent.SyncProgress(progress.coerceIn(0, 100)))
+        val clamped = progress.coerceIn(0, 100)
+        eventEmitter.emitConversation(ConversationEvent.SyncProgress(clamped))
+        eventEmitter.setConversationSyncState(ConversationSyncState.Syncing(progress = clamped, reinstalled = true))
     }
 
     private suspend fun pullAndProcessGaps(needSync: Map<String, LongRange>, pullNums: Long) {
@@ -408,14 +432,15 @@ internal class MsgSyncer(
         if (hidden.isEmpty()) return
         hidden.chunked(SEQ_RANGE_BATCH_SIZE).forEach { batch ->
             val seqRanges = batch.map { conversation ->
+                val maxSeq = conversation.maxSeq
                 SeqRange(
                     conversationID = conversation.conversationID,
-                    begin = 0,
-                    end = conversation.maxSeq,
+                    begin = maxOf(maxSeq, 1L),
+                    end = maxSeq,
                     num = 1,
                 )
             }
-            runCatching { pullMessagesBySeqRanges(seqRanges, order = 0) }
+            runCatching { pullMessagesBySeqRanges(seqRanges, order = 1) }
                 .onFailure { e -> log.warn(e) { "pull batch failed (${seqRanges.size} ranges)" } }
         }
     }

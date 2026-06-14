@@ -10,6 +10,7 @@ import com.kurban.xuehuaim.sdk.enum.TokenCheckResult
 import com.kurban.xuehuaim.sdk.event.CallEvent
 import com.kurban.xuehuaim.sdk.event.ConnectionEvent
 import com.kurban.xuehuaim.sdk.event.ConversationEvent
+import com.kurban.xuehuaim.sdk.event.ConversationSyncState
 import com.kurban.xuehuaim.sdk.event.CustomBusinessEvent
 import com.kurban.xuehuaim.sdk.event.FavoriteEvent
 import com.kurban.xuehuaim.sdk.event.FriendshipEvent
@@ -71,6 +72,8 @@ class IMManager internal constructor(
     val messageEvents: SharedFlow<MessageEvent> = eventEmitter.messageEvents
 
     val conversationEvents: SharedFlow<ConversationEvent> = eventEmitter.conversationEvents
+
+    val conversationSyncState: StateFlow<ConversationSyncState> = eventEmitter.conversationSyncState
 
     val friendshipEvents: SharedFlow<FriendshipEvent> = eventEmitter.friendshipEvents
 
@@ -297,6 +300,7 @@ class IMManager internal constructor(
         }
         eventEmitter.setLoginStatus(LoginStatus.LOGOUT)
         eventEmitter.setConnectionState(ConnectionState.DISCONNECTED)
+        eventEmitter.setConversationSyncState(ConversationSyncState.Idle)
     }
 
     suspend fun uploadFile(

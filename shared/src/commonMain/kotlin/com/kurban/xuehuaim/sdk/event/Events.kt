@@ -48,6 +48,13 @@ sealed interface ConversationEvent {
     data class SyncFailed(val error: String) : ConversationEvent
 }
 
+sealed interface ConversationSyncState {
+    data object Idle : ConversationSyncState
+    data class Syncing(val progress: Int, val reinstalled: Boolean = false) : ConversationSyncState
+    data class Finished(val count: Int, val reinstalled: Boolean = false) : ConversationSyncState
+    data class Failed(val error: String) : ConversationSyncState
+}
+
 sealed interface FriendshipEvent {
     data class FriendAdded(val friend: FriendInfo) : FriendshipEvent
     data class FriendDeleted(val userId: String) : FriendshipEvent

@@ -957,7 +957,7 @@ internal fun applicationPlatformName(): String = when (currentPlatform()) {
     IMPlatform.WEB, IMPlatform.MINI_WEB -> "web"
 }
 
-internal class ImApiService(
+internal open class ImApiService(
     private val httpClient: SdkHttpClient,
 ) : ConversationSyncApi, FriendSyncApi, GroupSyncApi, VersionedListGapFillApi {
     suspend fun login(req: LoginReq): LoginResp =
@@ -1052,7 +1052,7 @@ internal class ImApiService(
         return resp.groupIDs
     }
 
-    override suspend fun getConversationsHasReadAndMaxSeq(
+    open override suspend fun getConversationsHasReadAndMaxSeq(
         userID: String,
         conversationIDs: List<String>,
     ): ConversationsHasReadAndMaxSeqResp = httpClient.imPostEnvelope(

@@ -5,6 +5,7 @@ import com.kurban.xuehuaim.sdk.enum.LoginStatus
 import com.kurban.xuehuaim.sdk.event.CallEvent
 import com.kurban.xuehuaim.sdk.event.ConnectionEvent
 import com.kurban.xuehuaim.sdk.event.ConversationEvent
+import com.kurban.xuehuaim.sdk.event.ConversationSyncState
 import com.kurban.xuehuaim.sdk.event.CustomBusinessEvent
 import com.kurban.xuehuaim.sdk.event.FavoriteEvent
 import com.kurban.xuehuaim.sdk.event.FriendshipEvent
@@ -37,6 +38,9 @@ internal class SdkEventEmitter {
 
     private val _conversationEvents = createEventFlow<ConversationEvent>()
     val conversationEvents: SharedFlow<ConversationEvent> = _conversationEvents.asSharedFlow()
+
+    private val _conversationSyncState = MutableStateFlow<ConversationSyncState>(ConversationSyncState.Idle)
+    val conversationSyncState: StateFlow<ConversationSyncState> = _conversationSyncState.asStateFlow()
 
     private val _friendshipEvents = createEventFlow<FriendshipEvent>()
     val friendshipEvents: SharedFlow<FriendshipEvent> = _friendshipEvents.asSharedFlow()
@@ -79,6 +83,10 @@ internal class SdkEventEmitter {
     suspend fun emitConnection(event: ConnectionEvent) = _connectionEvents.emit(event)
     suspend fun emitMessage(event: MessageEvent) = _messageEvents.emit(event)
     suspend fun emitConversation(event: ConversationEvent) = _conversationEvents.emit(event)
+
+    fun setConversationSyncState(state: ConversationSyncState) {
+        _conversationSyncState.value = state
+    }
     suspend fun emitFriendship(event: FriendshipEvent) = _friendshipEvents.emit(event)
     suspend fun emitGroup(event: GroupEvent) = _groupEvents.emit(event)
     suspend fun emitUser(event: UserEvent) = _userEvents.emit(event)
