@@ -11,6 +11,7 @@ import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.enum.ReceiveMessageOpt
 import com.kurban.xuehuaim.sdk.enum.VisibleType
 import com.kurban.xuehuaim.sdk.util.FlexibleNullableTimestampSerializer
+import com.kurban.xuehuaim.sdk.util.FlexibleTimestampSerializer
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -74,6 +75,7 @@ data class PointsTransaction(
     val txType: Int = 0,
     val relatedID: String = "",
     val remark: String = "",
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val createTime: Long = 0,
 ) {
     val isIncome: Boolean get() = txType in listOf(2, 3, 4)
@@ -725,6 +727,7 @@ data class RedPacketGrabInfo(
     val nickname: String = "",
     @SerialName("faceURL") val faceURL: String = "",
     val amount: Double,
+    @Serializable(with = FlexibleTimestampSerializer::class)
     val createTime: Long,
 )
 

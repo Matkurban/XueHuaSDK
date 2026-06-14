@@ -1,7 +1,6 @@
 package com.kurban.xuehuaim.sdk.network.sync
 
 import com.kurban.xuehuaim.sdk.db.DatabaseService
-import com.kurban.xuehuaim.sdk.enum.ConnectionState
 import com.kurban.xuehuaim.sdk.enum.ConversationType
 import com.kurban.xuehuaim.sdk.enum.MessageType
 import com.kurban.xuehuaim.sdk.event.ConversationEvent
@@ -14,8 +13,6 @@ import com.kurban.xuehuaim.sdk.network.http.ConversationSeqInfo
 import com.kurban.xuehuaim.sdk.network.http.ImApiService
 import com.kurban.xuehuaim.sdk.network.notify.NotificationDispatcher
 import com.kurban.xuehuaim.sdk.network.ws.WebSocketService
-import com.kurban.xuehuaim.sdk.network.ws.WsIdentifier
-import com.kurban.xuehuaim.sdk.network.ws.WsRequest
 import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.platform.sdkScope
 import com.kurban.xuehuaim.sdk.sync.ConversationMinSeqSync
@@ -492,15 +489,7 @@ internal class MsgSyncer(
 
     private suspend fun pullMessagesBySeqRanges(seqRanges: List<SeqRange>, order: Int = 1) {
         if (seqRanges.isEmpty() || userId.isEmpty()) return
-        val pullResp = if (isWebSocketConnected()) {
-            runCatching { pullMsgByRangeWs(seqRanges, order) }
-                .getOrElse { error ->
-                    log.warn(error) { "WS pull by range failed, fallback to HTTP" }
-                    apiService.pullMsgBySeqs(userID = userId, seqRanges = seqRanges, order = order)
-                }
-        } else {
-            apiService.pullMsgBySeqs(userID = userId, seqRanges = seqRanges, order = order)
-        }
+        val pullResp = apiService.pullMsgBySeqs(userID = userId, seqRanges = seqRanges, order = order)
         val decoded = decodePullMsgsContent(pullResp)
         processPullMsgResp(decoded, bootstrapOnly = true)
     }
@@ -509,16 +498,7 @@ internal class MsgSyncer(
         conversationId: String,
         seqs: List<Long>,
         order: Int,
-    ): PullMsgResp {
-        if (isWebSocketConnected()) {
-            return runCatching { pullMsgBySeqListWs(conversationId, seqs, order) }
-                .getOrElse { error ->
-                    log.warn(error) { "WS pull by seq list failed, fallback to HTTP" }
-                    pullLostSeqChunkHttp(conversationId, seqs, order)
-                }
-        }
-        return pullLostSeqChunkHttp(conversationId, seqs, order)
-    }
+    ): PullMsgResp = pullLostSeqChunkHttp(conversationId, seqs, order)
 
     private suspend fun pullLostSeqChunkHttp(
         conversationId: String,
@@ -530,41 +510,6 @@ internal class MsgSyncer(
         }
         return apiService.pullMsgBySeqs(userID = userId, seqRanges = ranges, order = order)
     }
-
-    private suspend fun pullMsgByRangeWs(seqRanges: List<SeqRange>, order: Int): PullMsgResp {
-        val response = webSocketService.sendRequest(
-            WsRequest(
-                reqIdentifier = WsIdentifier.PULL_MSG_BY_RANGE,
-                data = encodePullMessageBySeqsReq(userId, seqRanges, order),
-            ),
-        )
-        if (!response.isSuccess) {
-            throw IllegalStateException("WS pull by range failed: ${response.errCode} ${response.errMsg}")
-        }
-        return decodePullMessageBySeqsResp(response.data)
-            ?: throw IllegalStateException("WS pull by range decode failed")
-    }
-
-    private suspend fun pullMsgBySeqListWs(
-        conversationId: String,
-        seqs: List<Long>,
-        order: Int,
-    ): PullMsgResp {
-        val response = webSocketService.sendRequest(
-            WsRequest(
-                reqIdentifier = WsIdentifier.PULL_MSG_BY_SEQ_LIST,
-                data = encodeGetSeqMessageReq(userId, conversationId, seqs, order),
-            ),
-        )
-        if (!response.isSuccess) {
-            throw IllegalStateException("WS pull by seq list failed: ${response.errCode} ${response.errMsg}")
-        }
-        return decodeGetSeqMessageResp(response.data)
-            ?: throw IllegalStateException("WS pull by seq list decode failed")
-    }
-
-    private fun isWebSocketConnected(): Boolean =
-        eventEmitter.connectionState.value == ConnectionState.CONNECTED
 
     private suspend fun processPullMsgResp(pullResp: PullMsgResp, bootstrapOnly: Boolean = false) {
         pullResp.msgs.forEach { (conversationId, msgList) ->

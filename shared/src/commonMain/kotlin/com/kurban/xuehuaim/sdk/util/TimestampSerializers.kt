@@ -59,3 +59,29 @@ object FlexibleNullableTimestampSerializer : KSerializer<Long?> {
         }
     }
 }
+
+object FlexibleTimestampSerializer : KSerializer<Long> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexibleTimestamp", PrimitiveKind.LONG)
+
+    @OptIn(ExperimentalSerializationApi::class)
+    override fun deserialize(decoder: Decoder): Long {
+        val jsonDecoder = decoder as? JsonDecoder
+        if (jsonDecoder != null) {
+            return when (val element = jsonDecoder.decodeJsonElement()) {
+                JsonNull -> 0L
+                is JsonPrimitive -> when {
+                    element.isString -> parseTimestampMillis(element.content) ?: 0L
+                    else -> element.longOrNull ?: 0L
+                }
+
+                else -> 0L
+            }
+        }
+        return decoder.decodeLong()
+    }
+
+    override fun serialize(encoder: Encoder, value: Long) {
+        encoder.encodeLong(value)
+    }
+}
