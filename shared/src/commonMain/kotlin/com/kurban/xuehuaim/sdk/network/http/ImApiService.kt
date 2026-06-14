@@ -158,7 +158,7 @@ internal object ChatApiRoutes {
     const val PAYMENT_PASSWORD_CHANGE = "/user/payment_password/change"
     const val PAYMENT_PASSWORD_VERIFY = "/user/payment_password/verify"
     const val PAYMENT_PASSWORD_CHECK = "/user/payment_password/check"
-    const val POINTS_BALANCE = "/user/points/balance"
+    const val POINTS_BALANCE = "/points/balance"
     const val POINTS_TRANSACTIONS = "/points/transactions"
     const val GET_USER_FULL = "/user/find/full"
     const val PAYMENT_PASSWORD_RESET = "/user/payment_password/reset"
