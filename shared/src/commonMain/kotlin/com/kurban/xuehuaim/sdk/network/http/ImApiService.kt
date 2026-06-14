@@ -1142,11 +1142,13 @@ internal open class ImApiService(
     suspend fun submitAppeal(req: AppealInfo): AppealInfo =
         httpClient.adminPostEnvelope(AdminApiRoutes.APPEAL_SUBMIT, req)
 
+    @Deprecated(
+        message = "Use getLatestApplicationVersion instead; /application/version is not available on server",
+        replaceWith = ReplaceWith("getLatestApplicationVersion(applicationPlatformName(), version)"),
+    )
     suspend fun checkAppVersion(version: String? = null): ApplicationVersionInfo =
-        httpClient.chatPostEnvelope(
-            ChatApiRoutes.APP_VERSION,
-            AppVersionReq(platform = applicationPlatformName(), version = version),
-        )
+        getLatestApplicationVersion(applicationPlatformName(), version)
+            ?: ApplicationVersionInfo(version = version.orEmpty())
 
     suspend fun register(req: RegisterReq): LoginResp =
         httpClient.chatPostEnvelope(ChatApiRoutes.REGISTER, req)
@@ -1897,6 +1899,7 @@ internal open class ImApiService(
             ChatApiRoutes.LATEST_APPLICATION_VERSION,
             mapOf("platform" to platform, "version" to currentVersion),
         )
-        return resp.version
+        val version = resp.version ?: return null
+        return version.takeIf { it.hasPublishedVersion }
     }
 }

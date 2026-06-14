@@ -7,7 +7,12 @@ import com.kurban.xuehuaim.sdk.network.http.ImApiService
 class ApplicationManager internal constructor(
     private val apiService: ImApiService,
 ) {
-    suspend fun checkVersion(): ApplicationVersionInfo = apiService.checkAppVersion()
+    @Deprecated(
+        message = "Use getLatestVersion instead",
+        replaceWith = ReplaceWith("getLatestVersion()"),
+    )
+    suspend fun checkVersion(): ApplicationVersionInfo =
+        getLatestVersion() ?: ApplicationVersionInfo()
 
     suspend fun getLatestVersion(
         platform: String,

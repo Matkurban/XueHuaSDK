@@ -9,9 +9,13 @@ import com.kurban.xuehuaim.sdk.platform.ioDispatcher
 import com.kurban.xuehuaim.sdk.util.SdkLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal object MomentSync {
     private val log = SdkLogger.tag("MomentSync")
+    private val inFlightMutex = Mutex()
+    private val inFlightFetches = mutableSetOf<String>()
 
     suspend fun getMomentList(
         apiService: ImApiService,
@@ -66,7 +70,6 @@ internal object MomentSync {
         )
         if (response.moments.isNotEmpty()) {
             databaseService.batchUpsertMoments(response.moments)
-            eventEmitter.emitMoments(MomentsEvent.ListUpdated(response.moments))
         }
         response
     }.getOrElse { error ->
@@ -82,17 +85,32 @@ internal object MomentSync {
         pageNumber: Int,
         showNumber: Int,
     ) {
-        runCatching {
-            val response = apiService.getMomentsList(
-                ownerUserID = ownerUserID.orEmpty(),
-                pageNumber = pageNumber,
-                showNumber = showNumber,
-            )
-            if (response.moments.isNotEmpty()) {
-                databaseService.batchUpsertMoments(response.moments)
-                eventEmitter.emitMoments(MomentsEvent.ListUpdated(response.moments))
+        val key = "${ownerUserID.orEmpty()}:$pageNumber:$showNumber"
+        val shouldFetch = inFlightMutex.withLock {
+            if (key in inFlightFetches) {
+                false
+            } else {
+                inFlightFetches.add(key)
+                true
             }
-        }.onFailure { error -> log.warn(error) { "background moment refresh failed" } }
+        }
+        if (!shouldFetch) return
+
+        try {
+            runCatching {
+                val response = apiService.getMomentsList(
+                    ownerUserID = ownerUserID.orEmpty(),
+                    pageNumber = pageNumber,
+                    showNumber = showNumber,
+                )
+                if (response.moments.isNotEmpty()) {
+                    databaseService.batchUpsertMoments(response.moments)
+                    eventEmitter.emitMoments(MomentsEvent.ListUpdated(response.moments))
+                }
+            }.onFailure { error -> log.warn(error) { "background moment refresh failed" } }
+        } finally {
+            inFlightMutex.withLock { inFlightFetches.remove(key) }
+        }
     }
 
     suspend fun syncFromServer(

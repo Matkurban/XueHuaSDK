@@ -639,11 +639,18 @@ data class AppealInfo(
 
 @Serializable
 data class ApplicationVersionInfo(
-    val version: String,
-    val forceUpdate: Boolean = false,
-    val downloadUrl: String? = null,
-    val releaseNotes: String? = null,
-)
+    @SerialName("id") val id: String = "",
+    @SerialName("platform") val platform: String = "",
+    @SerialName("version") val version: String = "",
+    @SerialName("force") val forceUpdate: Boolean = false,
+    @SerialName("url") val downloadUrl: String? = null,
+    @SerialName("text") val releaseNotes: String? = null,
+    @SerialName("latest") val latest: Boolean = false,
+    @SerialName("hot") val hot: Boolean = false,
+    @SerialName("createTime") val createTime: Long = 0L,
+) {
+    val hasPublishedVersion: Boolean get() = id.isNotBlank() && version.isNotBlank()
+}
 
 @Serializable
 data class UploadFileResult(
