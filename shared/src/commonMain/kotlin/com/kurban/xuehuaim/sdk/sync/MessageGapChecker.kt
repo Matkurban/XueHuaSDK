@@ -58,12 +58,11 @@ internal class MessageGapChecker(
         isReverse: Boolean,
     ): List<Message> {
         if (!startClientMsgId.isNullOrBlank()) {
-            val all = databaseService.getMessagesBySeqDesc(conversationId, count * 3)
-            val index = all.indexOfFirst { it.clientMsgID == startClientMsgId }
-            if (index < 0) return emptyList()
-            if (index == 0) return emptyList()
-            val slice = all.subList(maxOf(0, index - count), index)
-            return if (isReverse) slice.reversed() else slice
+            val anchor = databaseService.getMessageByClientMsgId(startClientMsgId) ?: return emptyList()
+            val beforeSeq = anchor.seq
+            if (beforeSeq <= 0) return emptyList()
+            val loaded = databaseService.getMessagesBySeqDesc(conversationId, count, beforeSeq)
+            return if (isReverse) loaded.reversed() else loaded
         }
         val loaded = databaseService.getMessagesBySeqDesc(conversationId, count + 1)
         return if (isReverse) loaded.reversed() else loaded

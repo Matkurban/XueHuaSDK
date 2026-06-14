@@ -8,6 +8,7 @@ import com.kurban.xuehuaim.sdk.platform.createDatabaseDriverFactory
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class MessageGapCheckerTest {
 
@@ -35,6 +36,30 @@ class MessageGapCheckerTest {
         val checker = MessageGapChecker(databaseService) { _, _, _ -> }
         val result = checker.fetchMessagesWithGapCheck("c1", count = 2, startClientMsgId = null)
         assertEquals(listOf(3L, 1L), result.messages.map { it.seq })
+    }
+
+    @Test
+    fun fetchMessagesWithGapCheck_paginatesOlderMessagesByAnchor() = runBlocking {
+        val databaseService = createTestDatabaseService()
+        (1..25).forEach { seq ->
+            databaseService.insertOrReplaceMessage(
+                Message(
+                    clientMsgID = "m$seq",
+                    conversationID = "c1",
+                    seq = seq.toLong(),
+                    sendTime = seq.toLong() * 10,
+                    contentType = MessageType.TEXT,
+                ),
+            )
+        }
+        val checker = MessageGapChecker(databaseService) { _, _, _ -> }
+        val firstPage = checker.fetchMessagesWithGapCheck("c1", count = 20, startClientMsgId = null)
+        assertEquals(20, firstPage.messages.size)
+
+        val anchor = firstPage.messages.last().clientMsgID
+        val secondPage = checker.fetchMessagesWithGapCheck("c1", count = 20, startClientMsgId = anchor)
+        assertTrue(secondPage.messages.isNotEmpty())
+        assertTrue(secondPage.messages.all { it.seq < firstPage.messages.last().seq })
     }
 
     private suspend fun createTestDatabaseService(): DatabaseService {
