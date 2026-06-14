@@ -1325,14 +1325,14 @@ internal open class ImApiService(
         return resp.groupRequests.map { it.toGroupApplicationInfo() }
     }
 
-    suspend fun getSendGroupApplicationList(
-        fromUserID: String,
+        suspend fun getSendGroupApplicationList(
+        userID: String,
         pageNumber: Int = 1,
         pageSize: Int = 100,
     ): List<GroupApplicationInfo> {
         val resp: GetGroupApplicationListResp = httpClient.imPostEnvelope(
             ImApiRoutes.GET_SEND_GROUP_APPLICATION_LIST,
-            FromUserPaginationReq(fromUserID, Pagination(pageNumber, pageSize)),
+            UserPaginationReq(userID, Pagination(pageNumber, pageSize)),
         )
         return resp.groupRequests.map { it.toGroupApplicationInfo() }
     }
